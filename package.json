@@ -1,0 +1,140 @@
+{
+  "name": "mdcomments",
+  "displayName": "mdcomments",
+  "description": "Inline comments for rendered Markdown previews in VS Code",
+  "version": "0.0.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:mdcomments.openCommentablePreview",
+    "onCommand:mdcomments.addCommentFromSelection",
+    "onCommand:mdcomments.showThreads",
+    "onCommand:mdcomments.resolveThread",
+    "onCommand:mdcomments.copyUnresolvedContext",
+    "onView:mdcomments.threads"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mdcomments.openCommentablePreview",
+        "title": "mdcomments: Open Commentable Preview"
+      },
+      {
+        "command": "mdcomments.addCommentFromSelection",
+        "title": "mdcomments: Add Comment From Selection"
+      },
+      {
+        "command": "mdcomments.showThreads",
+        "title": "mdcomments: Show Threads"
+      },
+      {
+        "command": "mdcomments.resolveThread",
+        "title": "mdcomments: Resolve/Reopen Thread"
+      },
+      {
+        "command": "mdcomments.copyUnresolvedContext",
+        "title": "mdcomments: Copy Unresolved Comments As Context"
+      }
+    ],
+    "configuration": {
+      "title": "mdcomments",
+      "properties": {
+        "mdcomments.storage.mode": {
+          "type": "string",
+          "enum": [
+            "workspaceTemp",
+            "sidecar"
+          ],
+          "default": "workspaceTemp",
+          "description": "Storage backend for comment threads: workspaceTemp stores files under system temp, sidecar stores in repository"
+        },
+        "mdcomments.showResolved": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show resolved threads in the preview and thread explorer"
+        },
+        "mdcomments.enableTags": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable optional tags on threads"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mdcomments",
+          "title": "mdcomments",
+          "icon": "media/comment.svg"
+        }
+      ]
+    },
+    "views": {
+      "mdcomments": [
+        {
+          "id": "mdcomments.threads",
+          "name": "Threads"
+        }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "mdcomments.openCommentablePreview",
+          "when": "resourceExtname == .md",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "mdcomments.openCommentablePreview",
+          "when": "resourceScheme == file && resourceExtname == .md",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mdcomments.addCommentFromSelection",
+          "when": "resourceExtname == .md"
+        },
+        {
+          "command": "mdcomments.openCommentablePreview"
+        },
+        {
+          "command": "mdcomments.showThreads"
+        },
+        {
+          "command": "mdcomments.resolveThread"
+        },
+        {
+          "command": "mdcomments.copyUnresolvedContext"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "test:unit": "vitest run",
+    "check": "npm run compile && npm run test:unit"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.13.9",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.1.1"
+  }
+}
