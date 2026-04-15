@@ -51,12 +51,21 @@ export function buildAnchorFromQuote(source: string, quote: string): AnchorData 
     return buildAnchorFromMatch(source, rawQuote, fuzzyIndex);
   }
 
+  const orderedSpan = findOrderedTermSpan(source, rawQuote);
+  if (orderedSpan) {
+    return buildAnchorFromSpan(source, rawQuote, orderedSpan.start, orderedSpan.end);
+  }
+
   return null;
 }
 
 function buildAnchorFromMatch(source: string, quote: string, start: number): AnchorData {
+  return buildAnchorFromSpan(source, quote, start, start + quote.length);
+}
+
+function buildAnchorFromSpan(source: string, quote: string, start: number, end: number): AnchorData {
   const safeStart = Math.max(0, Math.min(start, source.length));
-  const safeEnd = Math.max(safeStart, Math.min(source.length, safeStart + quote.length));
+  const safeEnd = Math.max(safeStart, Math.min(source.length, end));
 
   return {
     quote,
@@ -97,6 +106,15 @@ export function resolveAnchor(source: string, anchor: AnchorData): ResolvedAncho
     };
   }
 
+  const byRangeHint = tryRangeHint(source, anchor);
+  if (byRangeHint !== null) {
+    return {
+      start: byRangeHint.start,
+      end: byRangeHint.end,
+      confidence: "exact"
+    };
+  }
+
   const fuzzyIndex = findBestFuzzyMatch(source, quote, anchor.startHint);
   if (fuzzyIndex >= 0) {
     return {
@@ -133,6 +151,101 @@ function tryHint(source: string, anchor: AnchorData): number | null {
   }
 
   return null;
+}
+
+function tryRangeHint(source: string, anchor: AnchorData): { start: number; end: number } | null {
+  const candidates: Array<{ start: number | null; end: number | null }> = [
+    { start: anchor.currentStart ?? null, end: anchor.currentEnd ?? null },
+    { start: anchor.startHint, end: anchor.endHint }
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.start === null || candidate.end === null) {
+      continue;
+    }
+
+    const start = candidate.start;
+    const end = candidate.end;
+    if (start < 0 || end <= start || end > source.length) {
+      continue;
+    }
+
+    if (rangeContextMatches(source, anchor, start, end)) {
+      return { start, end };
+    }
+  }
+
+  return null;
+}
+
+function rangeContextMatches(source: string, anchor: AnchorData, start: number, end: number): boolean {
+  const prefixNeedle = normalizeForMatching(anchor.prefix).slice(-20);
+  const suffixNeedle = normalizeForMatching(anchor.suffix).slice(0, 20);
+
+  if (!prefixNeedle && !suffixNeedle) {
+    return false;
+  }
+
+  const rawPrefix = source.slice(Math.max(0, start - anchor.prefix.length), start);
+  const rawSuffix = source.slice(end, Math.min(source.length, end + anchor.suffix.length));
+  const normalizedPrefix = normalizeForMatching(rawPrefix);
+  const normalizedSuffix = normalizeForMatching(rawSuffix);
+
+  const prefixOk = !prefixNeedle || normalizedPrefix.endsWith(prefixNeedle);
+  const suffixOk = !suffixNeedle || normalizedSuffix.startsWith(suffixNeedle);
+  return prefixOk && suffixOk;
+}
+
+function findOrderedTermSpan(source: string, quote: string): { start: number; end: number } | null {
+  const rawTerms = quote
+    .split(/\s+/)
+    .map((term) => term.replace(/^[^0-9A-Za-z]+|[^0-9A-Za-z]+$/g, ""))
+    .filter((term) => term.length >= 2);
+
+  if (rawTerms.length < 2) {
+    return null;
+  }
+
+  const sourceLower = source.toLowerCase();
+  const terms = rawTerms.map((term) => term.toLowerCase());
+  const first = terms[0];
+  const maxSpan = Math.max(160, quote.length * 20);
+
+  let best: { start: number; end: number } | null = null;
+  let searchFrom = 0;
+
+  while (searchFrom < sourceLower.length) {
+    const firstIndex = sourceLower.indexOf(first, searchFrom);
+    if (firstIndex < 0) {
+      break;
+    }
+
+    let cursor = firstIndex + first.length;
+    let end = cursor;
+    let matchedAll = true;
+
+    for (let i = 1; i < terms.length; i += 1) {
+      const next = terms[i];
+      const nextIndex = sourceLower.indexOf(next, cursor);
+      if (nextIndex < 0) {
+        matchedAll = false;
+        break;
+      }
+
+      end = nextIndex + next.length;
+      cursor = end;
+    }
+
+    if (matchedAll && end - firstIndex <= maxSpan) {
+      if (!best || end - firstIndex < best.end - best.start) {
+        best = { start: firstIndex, end };
+      }
+    }
+
+    searchFrom = firstIndex + 1;
+  }
+
+  return best;
 }
 
 function findBestFuzzyMatch(source: string, quote: string, hint: number): number {

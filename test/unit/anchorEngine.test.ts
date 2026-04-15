@@ -34,6 +34,26 @@ describe("anchorEngine", () => {
     expect(anchor?.quote).toContain("hello");
   });
 
+  it("anchors non-contiguous table column selections", () => {
+    const source = [
+      "| Feature | Owner |",
+      "| --- | --- |",
+      "| Auth | Team A |",
+      "| Billing | Team B |",
+      "| Search | Team C |"
+    ].join("\n");
+
+    const selectedFromPreview = "Auth Billing Search";
+    const anchor = buildAnchorFromQuote(source, selectedFromPreview);
+
+    expect(anchor).not.toBeNull();
+
+    const result = resolveAnchor(source, anchor!);
+    expect(result.confidence).toBe("exact");
+    expect(result.start).toBeGreaterThanOrEqual(0);
+    expect(result.end).toBeGreaterThan(result.start);
+  });
+
   it("marks thread orphaned when quote disappears", () => {
     const source = "Alpha beta gamma delta";
     const thread: ThreadRecord = {
