@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.3 - 2026-04-15
+
+- Fixed thread highlight rendering when selected text spans multiple inline elements
+- Improved highlight matching for repeated quotes by using anchor prefix/suffix context
+- Improved text normalization for punctuation and whitespace to reduce cross-device highlight drift
+
 ## 0.0.2 - 2026-04-15
 
 - Added explorer right-click action to open commentable preview for markdown files

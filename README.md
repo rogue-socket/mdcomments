@@ -2,6 +2,13 @@
 
 Inline, thread-based comments on rendered Markdown inside VS Code, built for doc reviews and AI-assisted editing workflows.
 
+## VS Code extension identity
+
+- Marketplace publisher: `rogue-socket`
+- Marketplace extension name: `commentonmd`
+- Full extension identifier: `rogue-socket.commentonmd`
+- Runtime: VS Code extension host (`main` -> `out/extension.js`)
+
 ## Start Here (Simple)
 
 ### What this is
@@ -176,17 +183,22 @@ This copies JSON to clipboard for unresolved threads (`open` + `orphaned`).
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `mdcomments.storage.mode` | `string` | `workspaceTemp` | Storage backend: `workspaceTemp` or `sidecar` |
+| `mdcomments.storage.mode` | `string` | `sidecar` | Storage backend: `sidecar` (portable, recommended) or `workspaceTemp` |
 | `mdcomments.showResolved` | `boolean` | `true` | Whether resolved threads are shown in preview and explorer |
 | `mdcomments.enableTags` | `boolean` | `true` | Enables optional tags metadata on threads |
 
 ## Storage model
 
-### Default mode: workspaceTemp
+### Default mode: sidecar
+
+- Sidecar JSON is written next to markdown files
+- Portable across machines and teammates via repository sync
+
+### Optional mode: workspaceTemp
 
 - Sidecar-compatible JSON is written under system temp directory
 - Scoped by workspace fingerprint hash
-- Keeps repo clean by default
+- Useful for local-only review experiments
 
 ### Sidecar mode: sidecar
 
@@ -291,6 +303,87 @@ npm run package
 ```bash
 npm run publish
 ```
+
+## Shipping updates (release playbook)
+
+Use this flow every time you ship extension changes to Marketplace.
+
+### 1) Decide the version bump
+
+- Patch (`0.0.x`): bug fixes, non-breaking tweaks
+- Minor (`0.x.0`): new features, still backward compatible
+- Major (`x.0.0`): breaking changes in behavior or data model
+
+### 2) Update changelog first
+
+- Add a new section at the top of `CHANGELOG.md`
+- Keep entries user-focused (what changed, not internal refactors)
+
+### 3) Bump extension version
+
+Update `version` in `package.json` to the new release version.
+
+Optional helper command (if you prefer npm versioning):
+
+```bash
+npm version patch --no-git-tag-version
+```
+
+Use `minor` or `major` instead of `patch` as needed.
+
+### 4) Validate build and tests
+
+```bash
+npm run check
+```
+
+### 5) Create package artifact
+
+```bash
+npm run package
+```
+
+This generates a versioned `.vsix` in the project root.
+
+### 6) Publish to Marketplace
+
+```bash
+npm run publish
+```
+
+Required before publish:
+
+- Valid Marketplace publisher in `package.json`
+- Valid PAT available as `VSCE_PAT` (or interactive login configured)
+
+### 7) Verify the release
+
+After publish:
+
+- Check listing URL:
+	- `https://marketplace.visualstudio.com/items?itemName=rogue-socket.commentonmd`
+- Confirm version using:
+
+```bash
+npx --yes @vscode/vsce@3.8.0 show rogue-socket.commentonmd
+```
+
+Note: Marketplace page/index visibility can lag briefly after publish.
+
+### 8) Ship source-control metadata (recommended)
+
+```bash
+git add package.json CHANGELOG.md
+git commit -m "release: vX.Y.Z"
+git tag vX.Y.Z
+git push && git push --tags
+```
+
+## How users receive updates
+
+- Marketplace installs update automatically in VS Code by default
+- Users can also install a specific `.vsix` manually via `Extensions: Install from VSIX...`
+- If you publish multiple updates quickly, users may see a short delay before the newest version appears in search/listing pages
 
 ## Project docs
 
