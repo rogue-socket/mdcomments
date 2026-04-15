@@ -239,16 +239,17 @@ export class CommentablePreviewController {
       return;
     }
 
+    let createdAsOrphaned = false;
+
     await this.updateFileSidecar(fileUri, async (sidecar, documentText) => {
-      const anchor = buildAnchorFromQuote(documentText, quote);
-      if (!anchor) {
-        void vscode.window.showWarningMessage("mdcomments: Could not anchor selected text in source markdown");
-        return false;
-      }
+      const anchor = buildAnchorFromQuote(documentText, quote) ?? createUnanchoredAnchor(quote, documentText.length);
+      const status: ThreadRecord["status"] =
+        anchor.currentStart === null || anchor.currentEnd === null ? "orphaned" : "open";
+      createdAsOrphaned = status === "orphaned";
 
       sidecar.threads.push({
         id: `thr_${uuidv4()}`,
-        status: "open",
+        status,
         anchor,
         createdBy: getAuthor(),
         createdAt: new Date().toISOString(),
@@ -268,6 +269,12 @@ export class CommentablePreviewController {
 
       return true;
     });
+
+    if (createdAsOrphaned) {
+      void vscode.window.showWarningMessage(
+        "mdcomments: Comment saved, but the exact markdown anchor could not be resolved. Thread marked orphaned."
+      );
+    }
 
     await this.refresh();
   }
@@ -702,4 +709,17 @@ function applyResolvedState(thread: ThreadRecord, resolved: boolean): void {
 
   thread.status = "open";
   thread.resolvedAt = null;
+}
+
+function createUnanchoredAnchor(quote: string, sourceLength: number): ThreadRecord["anchor"] {
+  const boundedEnd = Math.max(0, Math.min(sourceLength, quote.length));
+  return {
+    quote,
+    prefix: "",
+    suffix: "",
+    startHint: 0,
+    endHint: boundedEnd,
+    currentStart: null,
+    currentEnd: null
+  };
 }

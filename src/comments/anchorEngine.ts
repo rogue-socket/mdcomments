@@ -38,20 +38,35 @@ export function buildAnchorFromQuote(source: string, quote: string): AnchorData 
 
   const exactIndex = source.indexOf(rawQuote);
   if (exactIndex >= 0) {
-    return buildAnchorFromOffsets(source, exactIndex, exactIndex + rawQuote.length);
+    return buildAnchorFromMatch(source, rawQuote, exactIndex);
   }
 
   const collapsedWhitespaceIndex = findByCollapsedWhitespace(source, rawQuote);
   if (collapsedWhitespaceIndex >= 0) {
-    return buildAnchorFromOffsets(source, collapsedWhitespaceIndex, collapsedWhitespaceIndex + rawQuote.length);
+    return buildAnchorFromMatch(source, rawQuote, collapsedWhitespaceIndex);
   }
 
   const fuzzyIndex = findBestFuzzyMatch(source, rawQuote, Math.floor(source.length / 2));
   if (fuzzyIndex >= 0) {
-    return buildAnchorFromOffsets(source, fuzzyIndex, fuzzyIndex + rawQuote.length);
+    return buildAnchorFromMatch(source, rawQuote, fuzzyIndex);
   }
 
   return null;
+}
+
+function buildAnchorFromMatch(source: string, quote: string, start: number): AnchorData {
+  const safeStart = Math.max(0, Math.min(start, source.length));
+  const safeEnd = Math.max(safeStart, Math.min(source.length, safeStart + quote.length));
+
+  return {
+    quote,
+    prefix: source.slice(Math.max(0, safeStart - CONTEXT_RADIUS), safeStart),
+    suffix: source.slice(safeEnd, Math.min(source.length, safeEnd + CONTEXT_RADIUS)),
+    startHint: safeStart,
+    endHint: safeEnd,
+    currentStart: safeStart,
+    currentEnd: safeEnd
+  };
 }
 
 export function resolveAnchor(source: string, anchor: AnchorData): ResolvedAnchor {

@@ -471,7 +471,7 @@ function renderThreadGroup(root, title, threads) {
 function applyThreadHighlights() {
   const highlightable = state.threads.filter((thread) => thread.status !== "resolved");
   for (const thread of highlightable) {
-    wrapFirstTextMatch(previewContent, thread.anchor.quote, thread.id, thread.status);
+    wrapFirstTextMatch(previewContent, thread);
   }
 }
 
@@ -798,14 +798,7 @@ function findMatchingThreads(selectedQuote, range) {
 }
 
 function normalizeText(value) {
-  return value
-    .toLowerCase()
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/[\u2013\u2014]/g, "-")
-    .replace(/\u2026/g, "...")
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeForSearch(value);
 }
 
 function positionSelectionActions(rect) {
@@ -872,13 +865,46 @@ function makeButton(label, action, threadId) {
   return button;
 }
 
-function wrapFirstTextMatch(root, quote, threadId, status) {
+function wrapFirstTextMatch(root, thread) {
+  const quote = thread.anchor?.quote ?? "";
   const needle = quote.trim();
   if (!needle) {
     return;
   }
 
-  const lowerNeedle = needle.toLowerCase();
+  const textIndex = buildHighlightTextIndex(root);
+  if (!textIndex || !textIndex.fullText) {
+    return;
+  }
+
+  const match = findBestThreadMatch(textIndex, thread);
+  if (!match) {
+    return;
+  }
+
+  const range = createRangeFromTextSpan(textIndex, match.start, match.end);
+  if (!range || range.collapsed) {
+    return;
+  }
+
+  const marker = document.createElement("span");
+  marker.className = `mdc-anchor mdc-${thread.status}`;
+  marker.dataset.threadId = thread.id;
+
+  try {
+    const contents = range.extractContents();
+    marker.appendChild(contents);
+    range.insertNode(marker);
+  } catch {
+    return;
+  }
+}
+
+function buildHighlightTextIndex(root) {
+  const nodes = [];
+  const starts = [];
+  let fullText = "";
+
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (!node.nodeValue || !node.nodeValue.trim()) {
@@ -896,28 +922,214 @@ function wrapFirstTextMatch(root, quote, threadId, status) {
 
   while (walker.nextNode()) {
     const node = walker.currentNode;
-    const raw = node.nodeValue || "";
-    const lowerRaw = raw.toLowerCase();
-    const index = lowerRaw.indexOf(lowerNeedle);
-    if (index < 0) {
+    starts.push(fullText.length);
+    nodes.push(node);
+    fullText += node.nodeValue || "";
+  }
+
+  return {
+    nodes,
+    starts,
+    fullText
+  };
+}
+
+function findBestThreadMatch(textIndex, thread) {
+  const haystack = normalizeWithIndexMap(textIndex.fullText);
+  if (!haystack.text) {
+    return null;
+  }
+
+  const needle = normalizeForSearch(thread.anchor?.quote ?? "");
+  if (!needle) {
+    return null;
+  }
+
+  const prefix = normalizeForSearch(thread.anchor?.prefix ?? "");
+  const suffix = normalizeForSearch(thread.anchor?.suffix ?? "");
+
+  const matches = [];
+  let index = haystack.text.indexOf(needle);
+  while (index >= 0) {
+    const normalizedEnd = index + needle.length;
+    const startRaw = haystack.indexMap[index];
+    const endRaw = haystack.indexMap[normalizedEnd - 1];
+    if (typeof startRaw === "number" && typeof endRaw === "number") {
+      const before = haystack.text.slice(0, index);
+      const after = haystack.text.slice(normalizedEnd);
+      const score =
+        suffixOverlap(before, prefix) * 2 +
+        prefixOverlap(after, suffix) * 2 +
+        (prefix ? 0 : 1) +
+        (suffix ? 0 : 1);
+
+      matches.push({
+        start: startRaw,
+        end: endRaw + 1,
+        score
+      });
+    }
+
+    index = haystack.text.indexOf(needle, index + 1);
+  }
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  matches.sort((a, b) => b.score - a.score || a.start - b.start);
+  return matches[0];
+}
+
+function createRangeFromTextSpan(textIndex, start, end) {
+  const boundedStart = clamp(start, 0, textIndex.fullText.length);
+  const boundedEnd = clamp(end, boundedStart + 1, textIndex.fullText.length);
+
+  const startPos = resolveTextPosition(textIndex, boundedStart);
+  const endPos = resolveTextPosition(textIndex, boundedEnd);
+
+  if (!startPos || !endPos) {
+    return null;
+  }
+
+  const range = document.createRange();
+  range.setStart(startPos.node, startPos.offset);
+  range.setEnd(endPos.node, endPos.offset);
+  return range;
+}
+
+function resolveTextPosition(textIndex, absoluteIndex) {
+  const nodes = textIndex.nodes;
+  const starts = textIndex.starts;
+
+  if (nodes.length === 0) {
+    return null;
+  }
+
+  const maxIndex = textIndex.fullText.length;
+  const index = clamp(absoluteIndex, 0, maxIndex);
+
+  if (index === maxIndex) {
+    const last = nodes[nodes.length - 1];
+    return {
+      node: last,
+      offset: (last.nodeValue || "").length
+    };
+  }
+
+  let low = 0;
+  let high = starts.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const start = starts[mid];
+    const next = mid + 1 < starts.length ? starts[mid + 1] : maxIndex;
+
+    if (index < start) {
+      high = mid - 1;
       continue;
     }
 
-    const range = document.createRange();
-    range.setStart(node, index);
-    range.setEnd(node, index + needle.length);
+    if (index >= next) {
+      low = mid + 1;
+      continue;
+    }
 
-    const marker = document.createElement("span");
-    marker.className = `mdc-anchor mdc-${status}`;
-    marker.dataset.threadId = threadId;
+    return {
+      node: nodes[mid],
+      offset: index - start
+    };
+  }
 
-    try {
-      range.surroundContents(marker);
-      return;
-    } catch {
-      return;
+  return null;
+}
+
+function normalizeForSearch(value) {
+  return normalizeWithIndexMap(value).text;
+}
+
+function normalizeWithIndexMap(value) {
+  const chars = [];
+  const indexMap = [];
+  let previousWasWhitespace = true;
+
+  for (let i = 0; i < value.length; i += 1) {
+    const replacement = normalizeChar(value[i]);
+
+    for (const part of replacement) {
+      if (/\s/.test(part)) {
+        if (previousWasWhitespace) {
+          continue;
+        }
+
+        chars.push(" ");
+        indexMap.push(i);
+        previousWasWhitespace = true;
+        continue;
+      }
+
+      chars.push(part.toLowerCase());
+      indexMap.push(i);
+      previousWasWhitespace = false;
     }
   }
+
+  while (chars.length > 0 && chars[chars.length - 1] === " ") {
+    chars.pop();
+    indexMap.pop();
+  }
+
+  return {
+    text: chars.join(""),
+    indexMap
+  };
+}
+
+function normalizeChar(char) {
+  switch (char) {
+    case "\u2018":
+    case "\u2019":
+      return "'";
+    case "\u201C":
+    case "\u201D":
+      return '"';
+    case "\u2013":
+    case "\u2014":
+      return "-";
+    case "\u2026":
+      return "...";
+    default:
+      return char;
+  }
+}
+
+function suffixOverlap(text, target) {
+  if (!target) {
+    return 0;
+  }
+
+  const max = Math.min(text.length, target.length);
+  for (let size = max; size > 0; size -= 1) {
+    if (text.endsWith(target.slice(target.length - size))) {
+      return size;
+    }
+  }
+
+  return 0;
+}
+
+function prefixOverlap(text, target) {
+  if (!target) {
+    return 0;
+  }
+
+  const max = Math.min(text.length, target.length);
+  for (let size = max; size > 0; size -= 1) {
+    if (text.startsWith(target.slice(0, size))) {
+      return size;
+    }
+  }
+
+  return 0;
 }
 
 function focusThread(threadId) {
