@@ -11,7 +11,10 @@ export class CommentStore {
   constructor(private readonly output: vscode.OutputChannel) {}
 
   public getSidecarUri(markdownUri: vscode.Uri): vscode.Uri {
-    const mode = this.getStorageMode();
+    return this.getSidecarUriForMode(markdownUri, this.getStorageMode());
+  }
+
+  private getSidecarUriForMode(markdownUri: vscode.Uri, mode: StorageMode): vscode.Uri {
     if (mode === "workspaceTemp") {
       return this.getTempStorageUri(markdownUri);
     }
@@ -34,26 +37,31 @@ export class CommentStore {
 
   public async readForFile(markdownUri: vscode.Uri): Promise<CommentSidecar> {
     const targetFile = this.workspaceRelativePath(markdownUri);
-    const sidecarUri = this.getSidecarUri(markdownUri);
+    const mode = this.getStorageMode();
+    const sidecarUri = this.getSidecarUriForMode(markdownUri, mode);
+    const fallbackUri = this.getSidecarUriForMode(markdownUri, mode === "sidecar" ? "workspaceTemp" : "sidecar");
 
-    if (!(await exists(sidecarUri.fsPath))) {
-      return createEmptySidecar(targetFile);
+    const preferred = await this.readSidecarUri(sidecarUri, targetFile);
+    if (preferred) {
+      return preferred;
     }
 
-    try {
-      const content = await fs.readFile(sidecarUri.fsPath, "utf8");
-      const parsed = parseSidecar(JSON.parse(content));
-      return {
-        ...parsed,
-        targetFile
-      };
-    } catch (error) {
-      await this.backupInvalidFile(sidecarUri);
-      const message = `mdcomments: Sidecar for ${targetFile} is invalid. A backup was created and an empty store was loaded.`;
-      this.output.appendLine(`${message} Error: ${String(error)}`);
-      void vscode.window.showWarningMessage(message);
-      return createEmptySidecar(targetFile);
+    const fallback = await this.readSidecarUri(fallbackUri, targetFile);
+    if (fallback) {
+      // If users switch to sidecar mode after using temp mode, migrate automatically.
+      if (mode === "sidecar" && sidecarUri.fsPath !== fallbackUri.fsPath) {
+        await this.writeSidecarUri(sidecarUri, {
+          ...fallback,
+          targetFile,
+          updatedAt: new Date().toISOString()
+        });
+        this.output.appendLine(`mdcomments: migrated storage for ${targetFile} from temp to sidecar`);
+      }
+
+      return fallback;
     }
+
+    return createEmptySidecar(targetFile);
   }
 
   public async writeForFile(markdownUri: vscode.Uri, sidecar: CommentSidecar): Promise<CommentSidecar> {
@@ -66,29 +74,64 @@ export class CommentStore {
       updatedAt: new Date().toISOString()
     });
 
+    await this.writeSidecarUri(sidecarUri, normalized);
+    return normalized;
+  }
+
+  private async readSidecarUri(uri: vscode.Uri, targetFile: string): Promise<CommentSidecar | null> {
+    if (!(await exists(uri.fsPath))) {
+      return null;
+    }
+
+    try {
+      const content = await fs.readFile(uri.fsPath, "utf8");
+      const parsed = parseSidecar(JSON.parse(content));
+      return {
+        ...parsed,
+        targetFile
+      };
+    } catch (error) {
+      await this.backupInvalidFile(uri);
+      const message = `mdcomments: Sidecar for ${targetFile} is invalid. A backup was created and an empty store was loaded.`;
+      this.output.appendLine(`${message} Error: ${String(error)}`);
+      void vscode.window.showWarningMessage(message);
+      return null;
+    }
+  }
+
+  private async writeSidecarUri(sidecarUri: vscode.Uri, sidecar: CommentSidecar): Promise<void> {
     const tempPath = `${sidecarUri.fsPath}.tmp-${Date.now()}`;
-    const payload = `${JSON.stringify(normalized, null, 2)}\n`;
+    const payload = `${JSON.stringify(sidecar, null, 2)}\n`;
 
     await fs.mkdir(path.dirname(sidecarUri.fsPath), { recursive: true });
     await fs.writeFile(tempPath, payload, "utf8");
     await fs.rename(tempPath, sidecarUri.fsPath);
-
-    return normalized;
   }
 
   public async listAllSidecars(): Promise<Array<{ uri: vscode.Uri; sidecar: CommentSidecar }>> {
     const mode = this.getStorageMode();
-    const sidecarUris =
+    const preferredUris =
       mode === "workspaceTemp"
         ? await this.findTempSidecars()
-        : await vscode.workspace.findFiles("**/*.mdcomments.json", "**/{node_modules,.git,out}/**");
+        : await this.findWorkspaceSidecars();
+    const secondaryUris =
+      mode === "workspaceTemp"
+        ? await this.findWorkspaceSidecars()
+        : await this.findTempSidecars();
+    const sidecarUris = [...preferredUris, ...secondaryUris];
 
     const results: Array<{ uri: vscode.Uri; sidecar: CommentSidecar }> = [];
+    const seenTargets = new Set<string>();
 
     for (const uri of sidecarUris) {
       try {
         const content = await fs.readFile(uri.fsPath, "utf8");
         const sidecar = parseSidecar(JSON.parse(content));
+        if (seenTargets.has(sidecar.targetFile)) {
+          continue;
+        }
+
+        seenTargets.add(sidecar.targetFile);
         results.push({ uri, sidecar });
       } catch (error) {
         this.output.appendLine(`mdcomments: Skipping invalid sidecar ${uri.fsPath}. Error: ${String(error)}`);
@@ -115,8 +158,12 @@ export class CommentStore {
   }
 
   private getStorageMode(): StorageMode {
-    const mode = vscode.workspace.getConfiguration("mdcomments").get<string>("storage.mode", "workspaceTemp");
+    const mode = vscode.workspace.getConfiguration("mdcomments").get<string>("storage.mode", "sidecar");
     return mode === "sidecar" ? "sidecar" : "workspaceTemp";
+  }
+
+  private async findWorkspaceSidecars(): Promise<vscode.Uri[]> {
+    return vscode.workspace.findFiles("**/*.mdcomments.json", "**/{node_modules,.git,out}/**");
   }
 
   private getTempRootDirectory(): string {

@@ -1,9 +1,9 @@
 {
-  "name": "mdcomments",
+  "name": "commentonmd",
   "displayName": "MD Comments",
   "description": "Inline comments for rendered Markdown previews in VS Code",
-  "version": "0.0.2",
-  "publisher": "local",
+  "version": "0.0.3",
+  "publisher": "rogue-socket",
   "preview": true,
   "license": "MIT",
   "repository": {
@@ -70,8 +70,8 @@
             "workspaceTemp",
             "sidecar"
           ],
-          "default": "workspaceTemp",
-          "description": "Storage backend for comment threads: workspaceTemp stores files under system temp, sidecar stores in repository"
+          "default": "sidecar",
+          "description": "Storage backend for comment threads: sidecar stores alongside markdown files for sharing, workspaceTemp stores files under system temp"
         },
         "mdcomments.showResolved": {
           "type": "boolean",
@@ -141,8 +141,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p .",
     "watch": "tsc -w -p .",
-    "package": "npx --yes @vscode/vsce package",
-    "publish": "npx --yes @vscode/vsce publish",
+    "package": "npx --yes @vscode/vsce@3.8.0 package",
+    "publish": "npx --yes @vscode/vsce@3.8.0 publish",
     "test:unit": "vitest run",
     "check": "npm run compile && npm run test:unit"
   },
