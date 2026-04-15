@@ -935,8 +935,8 @@ function findBestThreadMatch(textIndex, thread) {
     return null;
   }
 
-  const needle = normalizeForSearch(thread.anchor?.quote ?? "");
-  if (!needle) {
+  const needles = buildHighlightNeedles(thread.anchor);
+  if (needles.length === 0) {
     return null;
   }
 
@@ -944,28 +944,32 @@ function findBestThreadMatch(textIndex, thread) {
   const suffix = normalizeForSearch(thread.anchor?.suffix ?? "");
 
   const matches = [];
-  let index = haystack.text.indexOf(needle);
-  while (index >= 0) {
-    const normalizedEnd = index + needle.length;
-    const startRaw = haystack.indexMap[index];
-    const endRaw = haystack.indexMap[normalizedEnd - 1];
-    if (typeof startRaw === "number" && typeof endRaw === "number") {
-      const before = haystack.text.slice(0, index);
-      const after = haystack.text.slice(normalizedEnd);
-      const score =
-        suffixOverlap(before, prefix) * 2 +
-        prefixOverlap(after, suffix) * 2 +
-        (prefix ? 0 : 1) +
-        (suffix ? 0 : 1);
+  for (let needleIndex = 0; needleIndex < needles.length; needleIndex += 1) {
+    const needle = needles[needleIndex];
+    let index = haystack.text.indexOf(needle);
+    while (index >= 0) {
+      const normalizedEnd = index + needle.length;
+      const startRaw = haystack.indexMap[index];
+      const endRaw = haystack.indexMap[normalizedEnd - 1];
+      if (typeof startRaw === "number" && typeof endRaw === "number") {
+        const before = haystack.text.slice(0, index);
+        const after = haystack.text.slice(normalizedEnd);
+        const score =
+          suffixOverlap(before, prefix) * 2 +
+          prefixOverlap(after, suffix) * 2 +
+          (prefix ? 0 : 1) +
+          (suffix ? 0 : 1) +
+          (needleIndex === 0 ? 0.5 : 0);
 
-      matches.push({
-        start: startRaw,
-        end: endRaw + 1,
-        score
-      });
+        matches.push({
+          start: startRaw,
+          end: endRaw + 1,
+          score
+        });
+      }
+
+      index = haystack.text.indexOf(needle, index + 1);
     }
-
-    index = haystack.text.indexOf(needle, index + 1);
   }
 
   if (matches.length === 0) {
@@ -974,6 +978,50 @@ function findBestThreadMatch(textIndex, thread) {
 
   matches.sort((a, b) => b.score - a.score || a.start - b.start);
   return matches[0];
+}
+
+function buildHighlightNeedles(anchor) {
+  const candidates = [];
+  const quote = String(anchor?.quote ?? "");
+  const strippedQuote = stripListMarkers(quote);
+  const suffixFallback = takeVisibleFallbackText(anchor?.suffix ?? "");
+
+  candidates.push(quote);
+  if (strippedQuote && strippedQuote !== quote) {
+    candidates.push(strippedQuote);
+  }
+  if (suffixFallback) {
+    candidates.push(suffixFallback);
+  }
+
+  const normalizedUnique = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const normalized = normalizeForSearch(candidate);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    normalizedUnique.push(normalized);
+  }
+
+  return normalizedUnique;
+}
+
+function stripListMarkers(value) {
+  return String(value)
+    .replace(/(^|\n)\s*(?:\d+[.)]|[-*+])\s+/g, "$1")
+    .trim();
+}
+
+function takeVisibleFallbackText(value) {
+  const cleaned = stripListMarkers(String(value)).trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  return cleaned.split(/\s+/).slice(0, 8).join(" ");
 }
 
 function createRangeFromTextSpan(textIndex, start, end) {

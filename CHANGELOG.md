@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.7 - 2026-04-16
+
+- Fixed anchoring for non-contiguous table column selections so multi-row selections no longer save as orphaned in common cases
+- Fixed preview highlight matching for numbered-list selections when quotes include rendered list markers
+
+## 0.0.6 - 2026-04-16
+
+- Added `workspaceState` storage mode using VS Code workspace storage so comments stay out of repository files by default
+- Changed default `mdcomments.storage.mode` to `workspaceState`
+- Added automatic migration fallback across `workspaceState`, `sidecar`, and `workspaceTemp` when loading comments for a file
+
 ## 0.0.5 - 2026-04-16
 
 - Fixed visible highlights for selections spanning multiple elements (headings, lists, and table rows)
