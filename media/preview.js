@@ -887,17 +887,7 @@ function wrapFirstTextMatch(root, thread) {
     return;
   }
 
-  const marker = document.createElement("span");
-  marker.className = `mdc-anchor mdc-${thread.status}`;
-  marker.dataset.threadId = thread.id;
-
-  try {
-    const contents = range.extractContents();
-    marker.appendChild(contents);
-    range.insertNode(marker);
-  } catch {
-    return;
-  }
+  highlightRangeByTextSegments(root, range, thread);
 }
 
 function buildHighlightTextIndex(root) {
@@ -922,6 +912,11 @@ function buildHighlightTextIndex(root) {
 
   while (walker.nextNode()) {
     const node = walker.currentNode;
+    if (nodes.length > 0) {
+      // Preserve cross-element selection spacing in the search buffer.
+      fullText += " ";
+    }
+
     starts.push(fullText.length);
     nodes.push(node);
     fullText += node.nodeValue || "";
@@ -1041,6 +1036,77 @@ function resolveTextPosition(textIndex, absoluteIndex) {
   }
 
   return null;
+}
+
+function highlightRangeByTextSegments(root, range, thread) {
+  const segments = collectTextSegmentsInRange(root, range);
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    const segment = segments[i];
+    const segmentRange = document.createRange();
+    segmentRange.setStart(segment.node, segment.start);
+    segmentRange.setEnd(segment.node, segment.end);
+
+    const marker = document.createElement("span");
+    marker.className = `mdc-anchor mdc-${thread.status}`;
+    marker.dataset.threadId = thread.id;
+
+    try {
+      segmentRange.surroundContents(marker);
+    } catch {
+      try {
+        const contents = segmentRange.extractContents();
+        marker.appendChild(contents);
+        segmentRange.insertNode(marker);
+      } catch {
+        // Best-effort highlight only; ignore malformed subrange edge cases.
+      }
+    }
+  }
+}
+
+function collectTextSegmentsInRange(root, range) {
+  const segments = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) {
+        return NodeFilter.FILTER_REJECT;
+      }
+
+      const parent = node.parentElement;
+      if (!parent || parent.closest(".mdc-anchor")) {
+        return NodeFilter.FILTER_REJECT;
+      }
+
+      if (!range.intersectsNode(node)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const text = node.nodeValue || "";
+    let start = 0;
+    let end = text.length;
+
+    if (node === range.startContainer) {
+      start = range.startOffset;
+    }
+
+    if (node === range.endContainer) {
+      end = range.endOffset;
+    }
+
+    if (end <= start) {
+      continue;
+    }
+
+    segments.push({ node, start, end });
+  }
+
+  return segments;
 }
 
 function normalizeForSearch(value) {
