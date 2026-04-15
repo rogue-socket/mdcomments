@@ -2,7 +2,7 @@
   "name": "commentonmd",
   "displayName": "MD Comments",
   "description": "Inline comments for rendered Markdown previews in VS Code",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "publisher": "rogue-socket",
   "preview": true,
   "license": "MIT",
@@ -67,11 +67,11 @@
         "mdcomments.storage.mode": {
           "type": "string",
           "enum": [
-            "workspaceTemp",
-            "sidecar"
+            "workspaceState",
+            "workspaceTemp"
           ],
-          "default": "sidecar",
-          "description": "Storage backend for comment threads: sidecar stores alongside markdown files for sharing, workspaceTemp stores files under system temp"
+          "default": "workspaceState",
+          "description": "Storage backend for comment threads: workspaceState stores data in VS Code workspace storage, workspaceTemp stores files under a workspace-scoped temp directory outside your repository"
         },
         "mdcomments.showResolved": {
           "type": "boolean",

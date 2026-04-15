@@ -9,7 +9,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const output = vscode.window.createOutputChannel("mdcomments");
   context.subscriptions.push(output);
 
-  const store = new CommentStore(output);
+  const store = new CommentStore(context, output);
   const threadTreeProvider = new ThreadTreeProvider();
   const previewController = new CommentablePreviewController(context, store, threadTreeProvider);
 
