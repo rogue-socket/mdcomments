@@ -79,20 +79,6 @@ export class ThreadTreeProvider implements vscode.TreeDataProvider<FileNode | Th
     this.emitter.fire();
   }
 
-  public getAllThreads(): Array<{ fileUri: vscode.Uri; targetFile: string; thread: ThreadRecord }> {
-    const results: Array<{ fileUri: vscode.Uri; targetFile: string; thread: ThreadRecord }> = [];
-    for (const entry of this.entries.values()) {
-      for (const thread of entry.threads) {
-        results.push({
-          fileUri: entry.fileUri,
-          targetFile: entry.targetFile,
-          thread
-        });
-      }
-    }
-    return results;
-  }
-
   public getTreeItem(element: FileNode | ThreadNode): vscode.TreeItem {
     return element;
   }

@@ -11,7 +11,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const store = new CommentStore(output);
   const threadTreeProvider = new ThreadTreeProvider();
-  const previewController = new CommentablePreviewController(context, store, threadTreeProvider, output);
+  const previewController = new CommentablePreviewController(context, store, threadTreeProvider);
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider("mdcomments.threads", threadTreeProvider)
@@ -19,13 +19,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("mdcomments.openCommentablePreview", async (uri?: vscode.Uri, threadId?: string) => {
-      const targetUri = resolveTargetUri(uri, previewController);
+      const targetUri = resolveMarkdownTargetUri(uri, previewController);
       if (!targetUri) {
-        return;
-      }
-
-      if (!isMarkdown(targetUri)) {
-        void vscode.window.showInformationMessage("mdcomments is enabled only for .md files");
         return;
       }
 
@@ -35,9 +30,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("mdcomments.addCommentFromSelection", async () => {
-      const targetUri = resolveTargetUri(undefined, previewController);
-      if (!targetUri || !isMarkdown(targetUri)) {
-        void vscode.window.showInformationMessage("mdcomments is enabled only for .md files");
+      const targetUri = resolveMarkdownTargetUri(undefined, previewController);
+      if (!targetUri) {
         return;
       }
 
@@ -48,9 +42,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("mdcomments.showThreads", async () => {
-      const targetUri = resolveTargetUri(undefined, previewController);
-      if (!targetUri || !isMarkdown(targetUri)) {
-        void vscode.window.showInformationMessage("mdcomments is enabled only for .md files");
+      const targetUri = resolveMarkdownTargetUri(undefined, previewController);
+      if (!targetUri) {
         return;
       }
 
@@ -82,15 +75,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("mdcomments.resolveThread", async (uri?: vscode.Uri, threadId?: string) => {
-      const targetUri = resolveTargetUri(uri, previewController);
-      if (!targetUri || !isMarkdown(targetUri)) {
-        void vscode.window.showInformationMessage("mdcomments is enabled only for .md files");
+      const targetUri = resolveMarkdownTargetUri(uri, previewController);
+      if (!targetUri) {
         return;
       }
 
+      const toggleAndOpen = async (id: string): Promise<void> => {
+        await previewController.toggleThreadStatus(targetUri, id);
+        await previewController.open(targetUri, id);
+      };
+
       if (threadId) {
-        await previewController.toggleThreadStatus(targetUri, threadId);
-        await previewController.open(targetUri, threadId);
+        await toggleAndOpen(threadId);
         return;
       }
 
@@ -115,8 +111,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
 
-      await previewController.toggleThreadStatus(targetUri, selected.threadId);
-      await previewController.open(targetUri, selected.threadId);
+      await toggleAndOpen(selected.threadId);
     })
   );
 
@@ -163,6 +158,19 @@ function resolveTargetUri(
   }
 
   return controller.getCurrentFileUri();
+}
+
+function resolveMarkdownTargetUri(
+  candidate: vscode.Uri | undefined,
+  controller: CommentablePreviewController
+): vscode.Uri | undefined {
+  const targetUri = resolveTargetUri(candidate, controller);
+  if (!targetUri || !isMarkdown(targetUri)) {
+    void vscode.window.showInformationMessage("mdcomments is enabled only for .md files");
+    return undefined;
+  }
+
+  return targetUri;
 }
 
 function isMarkdown(uri: vscode.Uri): boolean {

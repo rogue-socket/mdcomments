@@ -17,6 +17,7 @@ type HostMessage =
   | { type: "reopenThread"; payload: { threadId: string } }
   | { type: "deleteThread"; payload: { threadId: string } }
   | { type: "deleteComment"; payload: { threadId: string; commentId: string } }
+  | { type: "focusThread"; payload: { threadId: string } }
   | { type: "copyContext" }
   | { type: "refresh" };
 
@@ -24,18 +25,43 @@ export class CommentablePreviewController {
   private panel: vscode.WebviewPanel | undefined;
   private currentFileUri: vscode.Uri | undefined;
   private readonly markdownIt: MarkdownIt;
+  private lastDecoratedFileUri: vscode.Uri | undefined;
+  private readonly openThreadDecoration: vscode.TextEditorDecorationType;
+  private readonly orphanedThreadDecoration: vscode.TextEditorDecorationType;
+  private readonly resolvedThreadDecoration: vscode.TextEditorDecorationType;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly store: CommentStore,
-    private readonly threadTreeProvider: ThreadTreeProvider,
-    private readonly output: vscode.OutputChannel
+    private readonly threadTreeProvider: ThreadTreeProvider
   ) {
     this.markdownIt = new MarkdownIt({
       html: false,
       linkify: true,
       typographer: false
     });
+
+    this.openThreadDecoration = vscode.window.createTextEditorDecorationType({
+      overviewRulerColor: "#5da9ffcc",
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
+      rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+    });
+    this.orphanedThreadDecoration = vscode.window.createTextEditorDecorationType({
+      overviewRulerColor: "#f6b26bcc",
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
+      rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+    });
+    this.resolvedThreadDecoration = vscode.window.createTextEditorDecorationType({
+      overviewRulerColor: "#8690a4aa",
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
+      rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+    });
+
+    this.context.subscriptions.push(
+      this.openThreadDecoration,
+      this.orphanedThreadDecoration,
+      this.resolvedThreadDecoration
+    );
   }
 
   public getCurrentFileUri(): vscode.Uri | undefined {
@@ -79,13 +105,7 @@ export class CommentablePreviewController {
         return false;
       }
 
-      if (thread.status === "resolved") {
-        thread.status = "open";
-        thread.resolvedAt = null;
-      } else {
-        thread.status = "resolved";
-        thread.resolvedAt = new Date().toISOString();
-      }
+      applyResolvedState(thread, thread.status !== "resolved");
 
       return true;
     });
@@ -105,7 +125,7 @@ export class CommentablePreviewController {
     const mapped: Array<{ fileUri: vscode.Uri; targetFile: string; threads: ThreadRecord[] }> = [];
 
     for (const entry of entries) {
-      const targetUri = this.resolveTargetUriFromSidecar(entry.uri, entry.sidecar.targetFile);
+      const targetUri = this.resolveTargetUriFromSidecar(entry.sidecar.targetFile);
       if (!targetUri) {
         continue;
       }
@@ -138,7 +158,11 @@ export class CommentablePreviewController {
     });
 
     panel.onDidDispose(() => {
+      if (this.currentFileUri) {
+        this.clearOverviewRulerDecorationsForUri(this.currentFileUri);
+      }
       this.panel = undefined;
+      this.currentFileUri = undefined;
     });
 
     return panel;
@@ -170,6 +194,9 @@ export class CommentablePreviewController {
         return;
       case "deleteComment":
         await this.deleteComment(message.payload.threadId, message.payload.commentId);
+        return;
+      case "focusThread":
+        await this.refresh(message.payload.threadId);
         return;
       case "copyContext":
         await this.copyCurrentFileContext();
@@ -272,7 +299,7 @@ export class CommentablePreviewController {
       return true;
     });
 
-    await this.refresh(threadId);
+    await this.refresh();
   }
 
   private async editComment(threadId: string, commentId: string, bodyRaw: string): Promise<void> {
@@ -302,7 +329,7 @@ export class CommentablePreviewController {
       return true;
     });
 
-    await this.refresh(threadId);
+    await this.refresh();
   }
 
   private async setThreadResolvedState(threadId: string, resolved: boolean): Promise<void> {
@@ -317,13 +344,7 @@ export class CommentablePreviewController {
         return false;
       }
 
-      if (resolved) {
-        thread.status = "resolved";
-        thread.resolvedAt = new Date().toISOString();
-      } else {
-        thread.status = "open";
-        thread.resolvedAt = null;
-      }
+      applyResolvedState(thread, resolved);
 
       return true;
     });
@@ -368,7 +389,7 @@ export class CommentablePreviewController {
       return thread.comments.length !== before;
     });
 
-    await this.refresh(threadId);
+    await this.refresh();
   }
 
   private async refresh(focusThreadId?: string): Promise<void> {
@@ -392,6 +413,8 @@ export class CommentablePreviewController {
     const visibleThreads = showResolved
       ? activeSidecar.threads
       : activeSidecar.threads.filter((thread) => thread.status !== "resolved");
+
+    this.applyOverviewRulerDecorations(document, activeSidecar.threads, showResolved);
 
     await this.panel.webview.postMessage({
       type: "setState",
@@ -443,7 +466,7 @@ export class CommentablePreviewController {
     return undefined;
   }
 
-  private resolveTargetUriFromSidecar(sidecarUri: vscode.Uri, targetFile: string): vscode.Uri | undefined {
+  private resolveTargetUriFromSidecar(targetFile: string): vscode.Uri | undefined {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
       return undefined;
@@ -451,6 +474,95 @@ export class CommentablePreviewController {
 
     const candidate = vscode.Uri.joinPath(workspaceFolder.uri, targetFile);
     return candidate;
+  }
+
+  private applyOverviewRulerDecorations(
+    document: vscode.TextDocument,
+    threads: ThreadRecord[],
+    showResolved: boolean
+  ): void {
+    if (this.lastDecoratedFileUri && this.lastDecoratedFileUri.toString() !== document.uri.toString()) {
+      this.clearOverviewRulerDecorationsForUri(this.lastDecoratedFileUri);
+    }
+    this.lastDecoratedFileUri = document.uri;
+
+    const targetThreads = showResolved ? threads : threads.filter((thread) => thread.status !== "resolved");
+    const openOptions: vscode.DecorationOptions[] = [];
+    const orphanedOptions: vscode.DecorationOptions[] = [];
+    const resolvedOptions: vscode.DecorationOptions[] = [];
+
+    for (const thread of targetThreads) {
+      const option = this.toOverviewDecorationOption(document, thread);
+      if (!option) {
+        continue;
+      }
+
+      if (thread.status === "orphaned") {
+        orphanedOptions.push(option);
+        continue;
+      }
+
+      if (thread.status === "resolved") {
+        resolvedOptions.push(option);
+        continue;
+      }
+
+      openOptions.push(option);
+    }
+
+    for (const editor of vscode.window.visibleTextEditors) {
+      if (editor.document.uri.toString() !== document.uri.toString()) {
+        continue;
+      }
+
+      editor.setDecorations(this.openThreadDecoration, openOptions);
+      editor.setDecorations(this.orphanedThreadDecoration, orphanedOptions);
+      editor.setDecorations(this.resolvedThreadDecoration, resolvedOptions);
+    }
+  }
+
+  private clearOverviewRulerDecorationsForUri(uri: vscode.Uri): void {
+    for (const editor of vscode.window.visibleTextEditors) {
+      if (editor.document.uri.toString() !== uri.toString()) {
+        continue;
+      }
+
+      editor.setDecorations(this.openThreadDecoration, []);
+      editor.setDecorations(this.orphanedThreadDecoration, []);
+      editor.setDecorations(this.resolvedThreadDecoration, []);
+    }
+  }
+
+  private toOverviewDecorationOption(
+    document: vscode.TextDocument,
+    thread: ThreadRecord
+  ): vscode.DecorationOptions | undefined {
+    const documentLength = document.getText().length;
+    let start = thread.anchor.currentStart ?? thread.anchor.startHint;
+    let end = thread.anchor.currentEnd ?? thread.anchor.endHint;
+
+    start = clampNumber(start, 0, documentLength);
+    end = clampNumber(end, 0, documentLength);
+
+    if (end <= start) {
+      end = Math.min(documentLength, start + 1);
+    }
+
+    const range = new vscode.Range(document.positionAt(start), document.positionAt(end));
+    const latestComment = thread.comments[thread.comments.length - 1];
+    const hoverLines = [
+      `Status: ${thread.status}`,
+      `Quote: ${thread.anchor.quote}`
+    ];
+
+    if (latestComment) {
+      hoverLines.push(`Latest: ${latestComment.author}: ${latestComment.body}`);
+    }
+
+    return {
+      range,
+      hoverMessage: new vscode.MarkdownString(hoverLines.map((line) => escapeMarkdown(line)).join("  \n"))
+    };
   }
 
   private getHtml(webview: vscode.Webview): string {
@@ -489,6 +601,7 @@ export class CommentablePreviewController {
             <button id="selection-add-comment" type="button">Add comment</button>
           </div>
           <div id="selection-overlay" class="selection-overlay hidden" role="dialog" aria-label="Comments for selection"></div>
+          <div id="hover-overlay" class="hover-overlay hidden" role="dialog" aria-label="Thread preview"></div>
         </section>
         <aside class="thread-pane">
           <div class="thread-pane-header">
@@ -519,7 +632,7 @@ export class CommentablePreviewController {
 }
 
 function sanitizeBody(input: string): string {
-  return input.trim().replace(/\s+$/g, "");
+  return input.trim();
 }
 
 function getAuthor(): string {
@@ -563,4 +676,30 @@ function getNonce(): string {
     value += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return value;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function escapeMarkdown(input: string): string {
+  return input
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/`/g, "\\`")
+    .replace(/\*/g, "\\*")
+    .replace(/_/g, "\\_")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]");
+}
+
+function applyResolvedState(thread: ThreadRecord, resolved: boolean): void {
+  if (resolved) {
+    thread.status = "resolved";
+    thread.resolvedAt = new Date().toISOString();
+    return;
+  }
+
+  thread.status = "open";
+  thread.resolvedAt = null;
 }
