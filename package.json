@@ -1,23 +1,41 @@
 {
   "name": "mdcomments",
-  "displayName": "mdcomments",
+  "displayName": "MD Comments",
   "description": "Inline comments for rendered Markdown previews in VS Code",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "local",
+  "preview": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rogue-socket/mdcomments.git"
+  },
+  "homepage": "https://github.com/rogue-socket/mdcomments#readme",
+  "bugs": {
+    "url": "https://github.com/rogue-socket/mdcomments/issues"
+  },
   "engines": {
     "vscode": "^1.95.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false
+    },
+    "untrustedWorkspaces": {
+      "supported": true
+    }
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:mdcomments.openCommentablePreview",
-    "onCommand:mdcomments.addCommentFromSelection",
-    "onCommand:mdcomments.showThreads",
-    "onCommand:mdcomments.resolveThread",
-    "onCommand:mdcomments.copyUnresolvedContext",
-    "onView:mdcomments.threads"
+  "keywords": [
+    "markdown",
+    "comments",
+    "review",
+    "documentation"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -120,8 +138,11 @@
     }
   },
   "scripts": {
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p .",
     "watch": "tsc -w -p .",
+    "package": "npx --yes @vscode/vsce package",
+    "publish": "npx --yes @vscode/vsce publish",
     "test:unit": "vitest run",
     "check": "npm run compile && npm run test:unit"
   },
