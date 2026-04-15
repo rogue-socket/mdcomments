@@ -67,8 +67,13 @@ describe("contextExporter", () => {
     };
 
     const exported = buildUnresolvedContext([sidecar]);
-    expect(exported.entries).toHaveLength(1);
-    expect(exported.entries[0].threadId).toBe("thr_1");
-    expect(exported.entries[0].file).toBe("README.md");
+    expect(exported).toHaveLength(1);
+    expect(exported[0].text).toBe("hello");
+    expect(exported[0].thread).toEqual([
+      {
+        author: "local-user",
+        comment: "Update"
+      }
+    ]);
   });
 });
