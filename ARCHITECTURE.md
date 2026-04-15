@@ -12,9 +12,11 @@ This document maps the PRD to concrete modules, contracts, and runtime behavior 
   - Handles host<->webview message contracts
   - Orchestrates thread CRUD and re-render
 - `src/comments/store.ts`
-  - Storage path resolution for `workspaceTemp` and `sidecar` modes
-  - Sidecar read/write with validation and atomic writes
-  - Invalid sidecar backup for recovery
+  - Storage backend resolution for `workspaceState` and `workspaceTemp` modes
+  - Workspace-state persistence for repository-hidden local storage
+  - Temp-file storage read/write with validation and atomic writes
+  - Legacy sidecar import path for backward compatibility
+  - Invalid JSON backup for recovery
 - `src/comments/schema.ts`
   - Zod schema for sidecar data model
   - Runtime validation and strong TS types
@@ -46,19 +48,19 @@ This document maps the PRD to concrete modules, contracts, and runtime behavior 
 - `mdcomments.resolveThread`
   - Toggle resolve/reopen by explicit thread id or quick pick
 - `mdcomments.copyUnresolvedContext`
-  - Builds unresolved context JSON across workspace sidecars
+  - Builds unresolved context JSON across all configured storage backends
   - Copies output to clipboard
 
 ## Data flow
 
 1. User opens markdown preview via command
-2. Host reads markdown source + sidecar
+2. Host reads markdown source + comment store data
 3. Host runs re-anchor pass and persists changed anchors/statuses
 4. Host renders markdown HTML via `markdown-it`
 5. Host sends `setState` payload to webview
 6. Webview captures selection and posts CRUD events
 7. Selection on existing anchors opens an inline comment overlay
-8. Host mutates sidecar, persists atomically, and pushes refreshed state
+8. Host mutates thread store data, persists, and pushes refreshed state
 9. Thread tree provider refreshes to keep explorer in sync
 
 ## Message protocol
@@ -93,10 +95,10 @@ Host -> webview:
 
 ## Reliability choices
 
-- Sidecar writes use temp-file then rename for atomicity
-- Invalid sidecars are backed up to `*.invalid.<timestamp>.bak`
-- Sidecar content is schema-validated on every read/write
-- Default storage keeps comment files out of git repositories via workspace-scoped temp directory
+- File-backed writes use temp-file then rename for atomicity
+- Invalid JSON stores are backed up to `*.invalid.<timestamp>.bak`
+- Store content is schema-validated on every read/write
+- Default storage keeps comment data in VS Code workspace storage (no repository files)
 
 ## Security notes
 

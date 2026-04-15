@@ -1,8 +1,12 @@
 # Sidecar Schema v1
 
-This schema applies when `mdcomments.storage.mode` is set to `sidecar`.
+This schema defines the persisted thread payload shape used by mdcomments.
 
-Each markdown file stores comments in a sibling JSON file:
+- `workspaceState` mode stores this payload in VS Code workspace storage
+- `workspaceTemp` mode stores this payload as JSON under a workspace-scoped temp directory
+- Legacy sidecar files are still read for migration compatibility
+
+Legacy sidecar mapping format:
 
 - Markdown: `docs/spec.md`
 - Sidecar: `docs/spec.mdcomments.json`
@@ -51,4 +55,4 @@ Each markdown file stores comments in a sibling JSON file:
 - `status` values: `open`, `resolved`, `orphaned`
 - `currentStart/currentEnd` can become `null` when anchor is orphaned
 - `version` is required for future migrations
-- Default mode is `workspaceTemp`, which stores the same schema under a workspace-scoped temp directory instead of the repo
+- Default mode is `workspaceState`; `workspaceTemp` persists this schema as JSON files outside the repository

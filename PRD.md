@@ -266,7 +266,7 @@ Choose **Option B (custom preview webview) for v1**, with a later bridge to buil
 - `mdcomments.copyUnresolvedContext`
 
 ### Settings (initial)
-- `mdcomments.storage.mode`: `sidecar` (future: `workspaceFolder`)
+- `mdcomments.storage.mode`: `workspaceState` (alternatives: `workspaceTemp`, `sidecar`)
 - `mdcomments.showResolved`: boolean
 - `mdcomments.enableTags`: boolean
 

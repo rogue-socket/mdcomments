@@ -12,11 +12,11 @@
 
 ## Development workflow
 
-- Keep sidecar schema changes in `src/comments/schema.ts` backward-aware
+- Keep store schema changes in `src/comments/schema.ts` backward-aware
 - Add/update tests in `test/unit/` when anchor/store/export logic changes
 - Prefer small PRs and include before/after behavior notes
 - Keep docs synced when adding commands/settings
-- Default storage mode is `workspaceTemp`; use `sidecar` mode intentionally when testing repo-local persistence
+- Default storage mode is `workspaceState`; use `workspaceTemp` when testing file-backed local persistence outside the repository
 
 ## Useful commands
 

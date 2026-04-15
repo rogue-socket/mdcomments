@@ -1,394 +1,111 @@
 # MD Comments
 
-Inline, thread-based comments on rendered Markdown inside VS Code, built for doc reviews and AI-assisted editing workflows.
+Inline, thread-based comments on rendered Markdown inside VS Code
 
-## VS Code extension identity
+MD Comments is built for documentation review workflows where feedback needs to stay anchored to what readers actually see, not raw markdown syntax
 
-- Marketplace publisher: `rogue-socket`
-- Marketplace extension name: `commentonmd`
-- Full extension identifier: `rogue-socket.commentonmd`
-- Runtime: VS Code extension host (`main` -> `out/extension.js`)
+## What this extension does
 
-## Start Here (Simple)
+- Opens a dedicated commentable preview for `.md` files
+- Lets you select rendered text and create anchored comment threads
+- Keeps review comments out of your markdown source files
+- Tracks thread lifecycle: reply, edit, resolve, reopen, delete
+- Exports unresolved comments as structured JSON for AI-assisted editing
 
-### What this is
+## Typical workflow
 
-MD Comments lets you:
+1. Open a markdown file
+2. Run `mdcomments: Open Commentable Preview`
+3. Select text in the preview and create a thread
+4. Iterate in the thread pane (reply, edit, resolve, reopen)
+5. Run `mdcomments: Copy Unresolved Comments As Context` when you want AI-ready unresolved context
 
-- Open a special commentable preview for `.md` files
-- Select rendered text and attach threaded comments
-- Keep comments out of markdown source content
-- Export unresolved comments as structured context for AI tools
+## Why teams use it
 
-Think of it as "docs review comments" for local markdown files, inside VS Code.
+- Review feedback stays attached to rendered content
+- Comment state is explicit (`open`, `resolved`, `orphaned`)
+- Data is local and machine-readable
+- No markdown-adjacent comment files are created in your repository
 
-### Get started in 2 minutes
+## Core capabilities
 
-1. Install dependencies
+- Custom markdown preview webview with inline anchor highlights
+- Selection overlay that surfaces existing threads for selected text
+- Hover overlay that previews nearby thread context
+- Activity bar thread explorer (`mdcomments` -> `Threads`)
+- Re-anchoring after edits using exact and fuzzy matching
+- Orphan detection when anchor text can no longer be resolved
+- Deterministic unresolved-context JSON export for AI prompts
 
-```bash
-npm install
-```
+## Commands
 
-2. Compile
-
-```bash
-npm run compile
-```
-
-3. Start Extension Development Host from VS Code
-
-- Open this project in VS Code
-- Press `F5`
-
-4. Use it on a markdown file
-
-- Open any `.md` file
-- Run command: `mdcomments: Open Commentable Preview`
-- Select text in the rendered preview and click add comment
-
-### Basic usage flow
-
-1. Open preview for a markdown file
-2. Select text in preview
-3. Create a thread
-4. Reply, edit, resolve, reopen, or delete
-5. Run `mdcomments: Copy Unresolved Comments As Context` when you want AI-ready context
-
-## Screenshots
-
-I cannot capture UI screenshots from this terminal-only environment.
-
-If you share screenshots, I can wire them into this README immediately with polished captions.
-
-Suggested screenshot checklist:
-
-1. Commentable preview open with highlighted anchors
-2. Selection overlay with existing thread matches
-3. Thread pane showing open/resolved/orphaned examples
-4. Threads explorer view in activity bar
-5. Copied unresolved context JSON snippet
-
-Suggested file names:
-
-- `media/screenshots/01-preview-overview.png`
-- `media/screenshots/02-selection-overlay.png`
-- `media/screenshots/03-thread-pane.png`
-- `media/screenshots/04-explorer-view.png`
-- `media/screenshots/05-context-export.png`
-
-## Why this extension exists
-
-Markdown reviews often split feedback across chat, docs, or pull requests.
-
-This extension keeps feedback:
-
-- Anchored to rendered text
-- Structured for machine consumption
-- Local to your workspace
-- Easy to navigate and resolve
-
-## Feature set
-
-- Custom commentable markdown preview webview
-- Right-click explorer action to open preview for `.md`
-- Thread lifecycle: create, reply, edit, delete, resolve, reopen
-- Hover and selection overlays for contextual thread visibility
-- Thread explorer grouped by file
-- Automatic anchor re-resolution after document edits
-- Orphaned thread detection when anchors can no longer be found
-- Clipboard export of unresolved comments in deterministic JSON
-- Two storage modes: workspace temp or sidecar files
-
-## Install and run
-
-### Option A: Develop locally
-
-```bash
-npm install
-npm run compile
-```
-
-Then press `F5` in VS Code.
-
-### Option B: Package as VSIX
-
-```bash
-npm run check
-npm run package
-```
-
-Install generated `.vsix` via VS Code command:
-
-- Extensions: Install from VSIX...
-
-## How to use (detailed)
-
-### 1) Open commentable preview
-
-Use one of:
-
-- Command palette: `mdcomments: Open Commentable Preview`
-- Explorer context menu on a `.md` file
-- Editor title action when active file is `.md`
-
-### 2) Add a thread from selected text
-
-In the preview panel:
-
-1. Select rendered text
-2. Click add comment action
-3. Write comment body
-4. Submit
-
-A thread is created and anchored to that selection.
-
-### 3) Work threads
-
-Inside the thread pane you can:
-
-- Jump to thread anchor
-- Reply to thread
-- Edit or delete a comment
-- Resolve thread
-- Reopen resolved thread
-- Delete entire thread
-
-### 4) Navigate all threads
-
-Use:
-
-- `mdcomments: Show Threads` for a quick pick list in current file
-- Activity bar view container `mdcomments` -> `Threads`
-
-### 5) Export unresolved context for AI
-
-Run:
-
-- `mdcomments: Copy Unresolved Comments As Context`
-
-This copies JSON to clipboard for unresolved threads (`open` + `orphaned`).
-
-## Commands reference
-
-| Command | What it does |
+| Command | Behavior |
 | --- | --- |
-| `mdcomments: Open Commentable Preview` | Opens the commentable preview for active or selected markdown file |
-| `mdcomments: Add Comment From Selection` | Opens preview (if needed) and starts add-comment flow from current selection |
-| `mdcomments: Show Threads` | Shows threads in current markdown file and focuses selected one |
-| `mdcomments: Resolve/Reopen Thread` | Toggles thread status to resolved or open |
-| `mdcomments: Copy Unresolved Comments As Context` | Copies unresolved context JSON from workspace sidecars to clipboard |
+| `mdcomments: Open Commentable Preview` | Opens commentable preview for the selected or active markdown file |
+| `mdcomments: Add Comment From Selection` | Opens preview (if needed) and starts add-comment flow from selection |
+| `mdcomments: Show Threads` | Lists threads for current markdown file and focuses the selected thread |
+| `mdcomments: Resolve/Reopen Thread` | Toggles selected thread status between resolved and open |
+| `mdcomments: Copy Unresolved Comments As Context` | Copies unresolved thread context JSON to clipboard |
 
-## Settings reference
+## Settings
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `mdcomments.storage.mode` | `string` | `sidecar` | Storage backend: `sidecar` (portable, recommended) or `workspaceTemp` |
-| `mdcomments.showResolved` | `boolean` | `true` | Whether resolved threads are shown in preview and explorer |
-| `mdcomments.enableTags` | `boolean` | `true` | Enables optional tags metadata on threads |
+| `mdcomments.storage.mode` | `string` | `workspaceState` | `workspaceState` stores in VS Code workspace storage, `workspaceTemp` stores under a workspace-scoped temp directory outside your repository |
+| `mdcomments.showResolved` | `boolean` | `true` | Controls whether resolved threads are shown in preview and explorer |
+| `mdcomments.enableTags` | `boolean` | `true` | Enables optional tag metadata support in thread data |
 
 ## Storage model
 
-### Default mode: sidecar
+Default mode is `workspaceState`
 
-- Sidecar JSON is written next to markdown files
-- Portable across machines and teammates via repository sync
+- Stores comment data in VS Code extension workspace storage
+- No `.mdcomments.json` files are created in your repository
+- Good fit for local-only review workflows
 
-### Optional mode: workspaceTemp
+Optional mode is `workspaceTemp`
 
-- Sidecar-compatible JSON is written under system temp directory
-- Scoped by workspace fingerprint hash
-- Useful for local-only review experiments
+- Stores sidecar-shaped JSON under a workspace-scoped temp directory
+- Useful when you want local files that are outside the repository
 
-### Sidecar mode: sidecar
+## AI context output
 
-- Stores next to markdown file
-- Example: `docs/spec.md` -> `docs/spec.mdcomments.json`
-
-Switch mode in settings:
-
-- `mdcomments.storage.mode = sidecar`
-
-Sidecar schema details: [SIDECAR_SCHEMA.md](SIDECAR_SCHEMA.md)
-
-## Data shape for AI context export
-
-Current unresolved export format is a JSON array:
+Unresolved export format is a compact JSON array
 
 ```json
 [
-	{
-		"text": "Quoted markdown text",
-		"thread": [
-			{
-				"author": "local-user",
-				"comment": "Please tighten this section"
-			}
-		]
-	}
+  {
+    "text": "Quoted markdown text",
+    "thread": [
+      {
+        "author": "local-user",
+        "comment": "Please tighten this section"
+      }
+    ]
+  }
 ]
 ```
 
-This is intentionally compact so it can be pasted directly into AI prompts.
+Only unresolved threads are included (`open` and `orphaned`)
 
-## Thread statuses and anchoring behavior
+## Scope and limits
 
-Thread statuses:
+- Designed for markdown files only (`.md`)
+- Local-first workflow with no remote network calls by default
+- Not a real-time multi-user collaboration service
 
-- `open`: active comment thread
-- `resolved`: completed thread
-- `orphaned`: anchor can no longer be located after edits
+## Reliability and safety
 
-Re-anchoring strategy on file changes:
+- Atomic writes for file-backed mode (`workspaceTemp`)
+- Runtime schema validation on read/write
+- Invalid JSON stores are backed up as `.invalid.<timestamp>.bak`
+- Markdown rendering disables raw HTML in preview rendering
 
-1. Hint-based local exact search
-2. Full exact quote search
-3. Fuzzy matching fallback
-4. Mark as orphaned if unresolved
+## More docs
 
-## Reliability and safety behavior
-
-- Atomic sidecar writes (temp file + rename)
-- Schema validation on read/write
-- Invalid sidecars are backed up as `.invalid.<timestamp>.bak`
-- Markdown rendering blocks raw HTML
-- No remote network calls by default
-
-## Troubleshooting
-
-### "mdcomments is enabled only for .md files"
-
-Use a file with `.md` extension.
-
-### Comments disappeared after mode switch
-
-You likely switched storage mode.
-
-- `workspaceTemp` and `sidecar` are separate locations
-
-### A thread became orphaned
-
-The selected quote changed too much during edits.
-
-- Reopen preview and create a new thread at the new location if needed
-
-### Author shows as local-user
-
-Author is derived from local environment user variables.
-
-- If unavailable, fallback is `local-user`
-
-## Development and validation commands
-
-```bash
-npm run compile
-npm run watch
-npm run test:unit
-npm run check
-npm run package
-```
-
-## Packaging and publishing
-
-1. Set your real Marketplace publisher in `package.json` (`publisher` field)
-2. Validate and package
-
-```bash
-npm run check
-npm run package
-```
-
-3. Publish
-
-```bash
-npm run publish
-```
-
-## Shipping updates (release playbook)
-
-Use this flow every time you ship extension changes to Marketplace.
-
-### 1) Decide the version bump
-
-- Patch (`0.0.x`): bug fixes, non-breaking tweaks
-- Minor (`0.x.0`): new features, still backward compatible
-- Major (`x.0.0`): breaking changes in behavior or data model
-
-### 2) Update changelog first
-
-- Add a new section at the top of `CHANGELOG.md`
-- Keep entries user-focused (what changed, not internal refactors)
-
-### 3) Bump extension version
-
-Update `version` in `package.json` to the new release version.
-
-Optional helper command (if you prefer npm versioning):
-
-```bash
-npm version patch --no-git-tag-version
-```
-
-Use `minor` or `major` instead of `patch` as needed.
-
-### 4) Validate build and tests
-
-```bash
-npm run check
-```
-
-### 5) Create package artifact
-
-```bash
-npm run package
-```
-
-This generates a versioned `.vsix` in the project root.
-
-### 6) Publish to Marketplace
-
-```bash
-npm run publish
-```
-
-Required before publish:
-
-- Valid Marketplace publisher in `package.json`
-- Valid PAT available as `VSCE_PAT` (or interactive login configured)
-
-### 7) Verify the release
-
-After publish:
-
-- Check listing URL:
-	- `https://marketplace.visualstudio.com/items?itemName=rogue-socket.commentonmd`
-- Confirm version using:
-
-```bash
-npx --yes @vscode/vsce@3.8.0 show rogue-socket.commentonmd
-```
-
-Note: Marketplace page/index visibility can lag briefly after publish.
-
-### 8) Ship source-control metadata (recommended)
-
-```bash
-git add package.json CHANGELOG.md
-git commit -m "release: vX.Y.Z"
-git tag vX.Y.Z
-git push && git push --tags
-```
-
-## How users receive updates
-
-- Marketplace installs update automatically in VS Code by default
-- Users can also install a specific `.vsix` manually via `Extensions: Install from VSIX...`
-- If you publish multiple updates quickly, users may see a short delay before the newest version appears in search/listing pages
-
-## Project docs
-
-- Product requirements: [PRD.md](PRD.md)
-- Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Sidecar schema: [SIDECAR_SCHEMA.md](SIDECAR_SCHEMA.md)
-- Contributing guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Product requirements: [PRD.md](PRD.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Development, packaging, and publishing guide: [DEVELOPMENT.md](DEVELOPMENT.md)
