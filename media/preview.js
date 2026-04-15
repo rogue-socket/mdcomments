@@ -18,6 +18,7 @@ const refreshButton = document.getElementById("refresh");
 const selectionActions = document.getElementById("selection-actions");
 const selectionAddCommentButton = document.getElementById("selection-add-comment");
 const selectionOverlay = document.getElementById("selection-overlay");
+const hoverOverlay = document.getElementById("hover-overlay");
 
 const composer = document.getElementById("composer");
 const composerQuote = document.getElementById("composer-quote");
@@ -28,6 +29,8 @@ const toast = document.getElementById("toast");
 
 let pendingQuote = "";
 let pendingRect = null;
+let hoverHideTimer = null;
+let activeHoverAnchor = null;
 
 window.addEventListener("message", (event) => {
   const message = event.data;
@@ -81,6 +84,14 @@ previewContent.addEventListener("keyup", () => {
   updateSelectionActions();
 });
 
+previewContent.addEventListener("mouseover", (event) => {
+  maybeShowHoverOverlay(event);
+});
+
+previewContent.addEventListener("mouseout", (event) => {
+  maybeHideHoverOverlay(event);
+});
+
 document.addEventListener("selectionchange", () => {
   updateSelectionActions();
 });
@@ -101,12 +112,21 @@ if (previewPane instanceof HTMLElement) {
   previewPane.addEventListener("scroll", () => {
     hideSelectionActions();
     hideSelectionOverlay();
+    hideHoverOverlay();
   });
 }
 
+hoverOverlay.addEventListener("mouseenter", () => {
+  clearHoverHideTimer();
+});
+
+hoverOverlay.addEventListener("mouseleave", () => {
+  scheduleHideHoverOverlay();
+});
+
 document.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  const target = getEventElementTarget(event);
+  if (!target) {
     return;
   }
 
@@ -117,6 +137,10 @@ document.addEventListener("click", (event) => {
   if (!selectionOverlay.classList.contains("hidden") && !selectionOverlay.contains(target) && !selectionActions.contains(target)) {
     hideSelectionOverlay();
   }
+
+  if (!hoverOverlay.classList.contains("hidden") && !hoverOverlay.contains(target) && !target.closest(".mdc-anchor")) {
+    hideHoverOverlay();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -124,12 +148,13 @@ document.addEventListener("keydown", (event) => {
     closeComposer();
     hideSelectionActions();
     hideSelectionOverlay();
+    hideHoverOverlay();
   }
 });
 
 selectionOverlay.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  const target = getEventElementTarget(event);
+  if (!target) {
     return;
   }
 
@@ -142,12 +167,16 @@ selectionOverlay.addEventListener("click", (event) => {
   const threadId = actionElement.dataset.threadId;
 
   if (action === "jump" && threadId) {
-    focusThread(threadId);
+    event.preventDefault();
+    event.stopPropagation();
+    openThread(threadId);
     hideSelectionOverlay();
     return;
   }
 
   if (action === "add") {
+    event.preventDefault();
+    event.stopPropagation();
     openComposer(pendingQuote, pendingRect);
     hideSelectionOverlay();
   }
@@ -173,8 +202,8 @@ composerSubmit.addEventListener("click", () => {
 });
 
 threadList.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  const target = getEventElementTarget(event);
+  if (!target) {
     return;
   }
 
@@ -183,31 +212,36 @@ threadList.addEventListener("click", (event) => {
     return;
   }
 
+  event.preventDefault();
+  event.stopPropagation();
+
   const action = actionElement.dataset.action;
-  const threadId = actionElement.dataset.threadId;
+  const threadId =
+    actionElement.dataset.threadId ?? actionElement.closest(".thread-card")?.dataset.threadId ?? null;
   if (!action || !threadId) {
     return;
   }
 
   if (action === "jump") {
-    focusThread(threadId);
+    openThread(threadId);
     return;
   }
 
   if (action === "resolve") {
     vscode.postMessage({ type: "resolveThread", payload: { threadId } });
+    showToast("Thread resolved");
     return;
   }
 
   if (action === "reopen") {
     vscode.postMessage({ type: "reopenThread", payload: { threadId } });
+    showToast("Thread reopened");
     return;
   }
 
   if (action === "deleteThread") {
-    if (window.confirm("Delete this thread?")) {
-      vscode.postMessage({ type: "deleteThread", payload: { threadId } });
-    }
+    vscode.postMessage({ type: "deleteThread", payload: { threadId } });
+    showToast("Thread removed");
     return;
   }
 
@@ -239,9 +273,35 @@ threadList.addEventListener("click", (event) => {
       return;
     }
 
+    const commentItem = actionElement.closest(".comment-item");
+    if (!(commentItem instanceof HTMLElement)) {
+      return;
+    }
+
     const existing = actionElement.dataset.commentBody ?? "";
-    const nextBody = window.prompt("Edit comment", existing);
-    if (!nextBody || !nextBody.trim()) {
+    openInlineCommentEditor(commentItem, existing);
+    return;
+  }
+
+  if (action === "saveEditComment") {
+    const commentId = actionElement.dataset.commentId;
+    if (!commentId) {
+      return;
+    }
+
+    const editContainer = actionElement.closest(".comment-inline-edit");
+    if (!(editContainer instanceof HTMLElement)) {
+      return;
+    }
+
+    const textarea = editContainer.querySelector("textarea[data-inline-edit='true']");
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      return;
+    }
+
+    const nextBody = textarea.value.trim();
+    if (!nextBody) {
+      showToast("Edited comment cannot be empty");
       return;
     }
 
@@ -249,6 +309,15 @@ threadList.addEventListener("click", (event) => {
       type: "editComment",
       payload: { threadId, commentId, body: nextBody.trim() }
     });
+    showToast("Comment updated");
+    return;
+  }
+
+  if (action === "cancelEditComment") {
+    const editContainer = actionElement.closest(".comment-inline-edit");
+    if (editContainer instanceof HTMLElement) {
+      editContainer.remove();
+    }
     return;
   }
 
@@ -258,12 +327,11 @@ threadList.addEventListener("click", (event) => {
       return;
     }
 
-    if (window.confirm("Delete this comment?")) {
-      vscode.postMessage({
-        type: "deleteComment",
-        payload: { threadId, commentId }
-      });
-    }
+    vscode.postMessage({
+      type: "deleteComment",
+      payload: { threadId, commentId }
+    });
+    showToast("Comment deleted");
   }
 });
 
@@ -275,6 +343,7 @@ function render() {
   closeComposer();
   hideSelectionActions();
   hideSelectionOverlay();
+  hideHoverOverlay();
 }
 
 function renderThreads() {
@@ -471,6 +540,8 @@ function updateSelectionActions() {
     return;
   }
 
+  hideHoverOverlay();
+
   pendingQuote = selection.quote;
   pendingRect = selection.rect;
 
@@ -559,6 +630,141 @@ function hideSelectionOverlay() {
   selectionOverlay.innerHTML = "";
 }
 
+function maybeShowHoverOverlay(event) {
+  if (hasActiveTextSelection()) {
+    return;
+  }
+
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const anchor = target.closest(".mdc-anchor[data-thread-id]");
+  if (!(anchor instanceof HTMLElement)) {
+    return;
+  }
+
+  const threadId = anchor.dataset.threadId;
+  if (!threadId) {
+    return;
+  }
+
+  const thread = state.threads.find((entry) => entry.id === threadId);
+  if (!thread) {
+    return;
+  }
+
+  clearHoverHideTimer();
+  setActiveHoverAnchor(anchor);
+  renderHoverOverlay(thread, anchor.getBoundingClientRect());
+}
+
+function maybeHideHoverOverlay(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const leavingAnchor = target.closest(".mdc-anchor[data-thread-id]");
+  if (!leavingAnchor) {
+    return;
+  }
+
+  const related = event.relatedTarget;
+  if (related instanceof HTMLElement) {
+    if (related.closest(".mdc-anchor[data-thread-id]") || hoverOverlay.contains(related)) {
+      return;
+    }
+  }
+
+  scheduleHideHoverOverlay();
+}
+
+function renderHoverOverlay(thread, rect) {
+  const fragment = document.createDocumentFragment();
+
+  const header = document.createElement("div");
+  header.className = "hover-overlay-header";
+
+  const status = document.createElement("p");
+  status.className = "hover-overlay-status";
+  status.textContent = `${thread.status.toUpperCase()} · ${thread.comments.length} comment${thread.comments.length === 1 ? "" : "s"}`;
+  header.appendChild(status);
+
+  fragment.appendChild(header);
+
+  const quote = document.createElement("p");
+  quote.className = "hover-overlay-quote";
+  quote.textContent = truncate(thread.anchor.quote, 140);
+  fragment.appendChild(quote);
+
+  const comments = document.createElement("div");
+  comments.className = "hover-overlay-comments";
+  const recentComments = thread.comments.slice(-2);
+
+  for (const comment of recentComments) {
+    const item = document.createElement("article");
+    item.className = "hover-overlay-comment";
+
+    const author = document.createElement("p");
+    author.className = "hover-overlay-author";
+    author.textContent = `${comment.author} · ${formatDate(comment.createdAt)}`;
+    item.appendChild(author);
+
+    const body = document.createElement("p");
+    body.className = "hover-overlay-body";
+    body.textContent = truncate(comment.body, 240);
+    item.appendChild(body);
+
+    comments.appendChild(item);
+  }
+
+  fragment.appendChild(comments);
+
+  hoverOverlay.innerHTML = "";
+  hoverOverlay.appendChild(fragment);
+  positionHoverOverlay(rect);
+  hoverOverlay.classList.remove("hidden");
+}
+
+function hasActiveTextSelection() {
+  const selection = window.getSelection();
+  return Boolean(selection && selection.rangeCount > 0 && !selection.getRangeAt(0).collapsed);
+}
+
+function setActiveHoverAnchor(anchor) {
+  if (activeHoverAnchor && activeHoverAnchor !== anchor) {
+    activeHoverAnchor.classList.remove("mdc-hover");
+  }
+  activeHoverAnchor = anchor;
+  activeHoverAnchor.classList.add("mdc-hover");
+}
+
+function scheduleHideHoverOverlay() {
+  clearHoverHideTimer();
+  hoverHideTimer = window.setTimeout(() => {
+    hideHoverOverlay();
+  }, 160);
+}
+
+function clearHoverHideTimer() {
+  if (hoverHideTimer !== null) {
+    window.clearTimeout(hoverHideTimer);
+    hoverHideTimer = null;
+  }
+}
+
+function hideHoverOverlay() {
+  clearHoverHideTimer();
+  hoverOverlay.classList.add("hidden");
+  hoverOverlay.innerHTML = "";
+  if (activeHoverAnchor) {
+    activeHoverAnchor.classList.remove("mdc-hover");
+    activeHoverAnchor = null;
+  }
+}
+
 function findMatchingThreads(selectedQuote, range) {
   const normalizedSelection = normalizeText(selectedQuote);
   if (!normalizedSelection) {
@@ -624,6 +830,22 @@ function positionSelectionOverlay(rect) {
   selectionOverlay.style.width = `${overlayWidth}px`;
   selectionOverlay.style.left = `${x}px`;
   selectionOverlay.style.top = `${y}px`;
+}
+
+function positionHoverOverlay(rect) {
+  const width = Math.min(360, window.innerWidth - 16);
+  let x = rect.right + 10;
+  if (x + width > window.innerWidth - 8) {
+    x = rect.left - width - 10;
+  }
+  x = clamp(x, 8, window.innerWidth - width - 8);
+
+  const estimatedHeight = 230;
+  const y = clamp(rect.top - 10, 8, window.innerHeight - estimatedHeight - 8);
+
+  hoverOverlay.style.width = `${width}px`;
+  hoverOverlay.style.left = `${x}px`;
+  hoverOverlay.style.top = `${y}px`;
 }
 
 function positionComposer(rect) {
@@ -714,6 +936,11 @@ function focusThread(threadId) {
   }
 }
 
+function openThread(threadId) {
+  focusThread(threadId);
+  vscode.postMessage({ type: "focusThread", payload: { threadId } });
+}
+
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add("visible");
@@ -721,11 +948,12 @@ function showToast(message) {
 }
 
 function formatDate(iso) {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return String(iso);
   }
+
+  return date.toLocaleString();
 }
 
 function cssEscape(value) {
@@ -755,6 +983,69 @@ function summarizeThreads(threads) {
     },
     { open: 0, orphaned: 0, resolved: 0 }
   );
+}
+
+function openInlineCommentEditor(commentItem, existingBody) {
+  const existingEditor = commentItem.querySelector(".comment-inline-edit");
+  if (existingEditor instanceof HTMLElement) {
+    const textarea = existingEditor.querySelector("textarea[data-inline-edit='true']");
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.focus();
+      textarea.select();
+    }
+    return;
+  }
+
+  const openEditors = threadList.querySelectorAll(".comment-inline-edit");
+  for (const editor of openEditors) {
+    editor.remove();
+  }
+
+  const editor = document.createElement("div");
+  editor.className = "comment-inline-edit";
+
+  const textarea = document.createElement("textarea");
+  textarea.rows = 3;
+  textarea.dataset.inlineEdit = "true";
+  textarea.value = existingBody;
+  editor.appendChild(textarea);
+
+  const actions = document.createElement("div");
+  actions.className = "comment-inline-actions";
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.textContent = "Save";
+  save.dataset.action = "saveEditComment";
+  save.dataset.threadId = commentItem.closest(".thread-card")?.dataset.threadId ?? "";
+  const actionSource = commentItem.querySelector("[data-action='editComment']");
+  save.dataset.commentId = actionSource instanceof HTMLElement ? actionSource.dataset.commentId ?? "" : "";
+  actions.appendChild(save);
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "Cancel";
+  cancel.dataset.action = "cancelEditComment";
+  actions.appendChild(cancel);
+
+  editor.appendChild(actions);
+  commentItem.appendChild(editor);
+
+  textarea.focus();
+  textarea.select();
+}
+
+function getEventElementTarget(event) {
+  const target = event.target;
+  if (target instanceof HTMLElement) {
+    return target;
+  }
+
+  if (target instanceof Node) {
+    return target.parentElement;
+  }
+
+  return null;
 }
 
 vscode.postMessage({ type: "requestState" });

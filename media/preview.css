@@ -322,6 +322,42 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
+.comment-inline-edit {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.comment-inline-edit textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 8px;
+  background: #0f1420;
+  color: var(--text);
+  resize: vertical;
+  min-height: 70px;
+  font-family: inherit;
+}
+
+.comment-inline-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.comment-inline-actions button {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .reply-box textarea,
 #composer-body {
   width: 100%;
@@ -358,6 +394,11 @@ textarea:focus-visible {
 
 .mdc-orphaned {
   background: rgba(233, 176, 114, 0.18);
+}
+
+.mdc-anchor.mdc-hover {
+  box-shadow: 0 0 0 1px rgba(123, 176, 255, 0.5);
+  background: rgba(123, 176, 255, 0.28);
 }
 
 .selection-actions {
@@ -478,6 +519,70 @@ textarea:focus-visible {
   margin: 0;
   font-size: 11px;
   color: var(--muted);
+}
+
+.hover-overlay {
+  position: fixed;
+  z-index: 34;
+  background: #111827;
+  border: 1px solid #334158;
+  border-radius: 8px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.42);
+  padding: 8px;
+}
+
+.hover-overlay.hidden {
+  display: none;
+}
+
+.hover-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+}
+
+.hover-overlay-status {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.hover-overlay-quote {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #ecf1fa;
+}
+
+.hover-overlay-comments {
+  display: grid;
+  gap: 7px;
+}
+
+.hover-overlay-comment {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 7px;
+}
+
+.hover-overlay-author {
+  margin: 0 0 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.hover-overlay-body {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #ced7e6;
+  white-space: pre-wrap;
 }
 
 .composer {
