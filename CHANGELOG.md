@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.5 - 2026-04-16
+
+- Fixed visible highlights for selections spanning multiple elements (headings, lists, and table rows)
+- Improved cross-node text matching by preserving boundary spacing in preview highlight indexing
+- Applied highlight rendering per text segment to keep highlights visible across element boundaries
+
+## 0.0.4 - 2026-04-15
+
+- Fixed missing comments/threads across devices by making sidecar storage the default mode
+- Added storage fallback and migration path to recover existing temp-stored threads
+- Fixed thread creation to persist as orphaned instead of silently failing when exact source anchoring is not possible
+- Improved preview highlight reliability by preserving selected quote text in anchors
+
 ## 0.0.3 - 2026-04-15
 
 - Fixed thread highlight rendering when selected text spans multiple inline elements
