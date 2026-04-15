@@ -25,3 +25,13 @@
 - `mdcomments: Show Threads`
 - `mdcomments: Resolve/Reopen Thread`
 - `mdcomments: Copy Unresolved Comments As Context`
+
+## Release checklist
+
+1. Confirm `CHANGELOG.md` has an entry for the release version
+2. Run validation:
+   - `npm run check`
+   - `npm run package`
+3. Ensure `publisher` in `package.json` is set to your Marketplace publisher ID (not `local`)
+4. Build package:
+   - `npm run package`
