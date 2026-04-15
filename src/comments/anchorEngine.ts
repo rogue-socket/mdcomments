@@ -101,7 +101,7 @@ export function resolveAnchor(source: string, anchor: AnchorData): ResolvedAncho
 function tryHint(source: string, anchor: AnchorData): number | null {
   const quote = anchor.quote.trim();
   const startHint = anchor.currentStart ?? anchor.startHint;
-  const candidates = [startHint, anchor.startHint];
+  const candidates = startHint === anchor.startHint ? [startHint] : [startHint, anchor.startHint];
 
   for (const candidate of candidates) {
     if (candidate < 0 || candidate >= source.length) {
@@ -127,13 +127,14 @@ function findBestFuzzyMatch(source: string, quote: string, hint: number): number
 
   const step = Math.max(1, Math.floor(quote.length / 6));
   const regions = computeRegions(source.length, hint, quote.length);
+  const normalizedQuote = normalizeForMatching(quote);
   let bestScore = 0;
   let bestIndex = -1;
 
   for (const [start, end] of regions) {
     for (let i = start; i <= end - quote.length; i += step) {
       const candidate = source.slice(i, i + quote.length);
-      const score = diceCoefficient(normalize(candidate), normalize(quote));
+      const score = diceCoefficient(normalizeForMatching(candidate), normalizedQuote);
       if (score > bestScore) {
         bestScore = score;
         bestIndex = i;
@@ -156,10 +157,6 @@ function computeRegions(sourceLength: number, hint: number, quoteLength: number)
 
   regions.push([0, sourceLength]);
   return regions;
-}
-
-function normalize(value: string): string {
-  return normalizeForMatching(value);
 }
 
 function normalizeForMatching(value: string): string {
