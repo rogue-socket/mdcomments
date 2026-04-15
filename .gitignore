@@ -2,3 +2,20 @@ node_modules/
 out/
 .vscode-test/
 *.vsix
+
+# Local OS/editor artifacts
+.DS_Store
+
+# Logs and coverage
+*.log
+coverage/
+.nyc_output/
+
+# TypeScript build metadata
+*.tsbuildinfo
+
+# Local environment files
+user.env
+.env
+.env.*
+!.env.example
