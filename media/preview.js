@@ -391,6 +391,22 @@ function renderThreadGroup(root, title, threads) {
     card.className = `thread-card thread-${thread.status}`;
     card.dataset.threadId = thread.id;
 
+    const cardHeader = document.createElement("div");
+    cardHeader.className = "thread-card-header";
+
+    const status = document.createElement("span");
+    status.className = `thread-status status-${thread.status}`;
+    status.textContent = humanizeThreadStatus(thread.status);
+    cardHeader.appendChild(status);
+
+    const createdMeta = document.createElement("time");
+    createdMeta.className = "thread-created";
+    createdMeta.dateTime = thread.createdAt;
+    createdMeta.textContent = `Started ${formatDate(thread.createdAt)}`;
+    cardHeader.appendChild(createdMeta);
+
+    card.appendChild(cardHeader);
+
     const title = document.createElement("h3");
     title.className = "thread-quote";
     title.textContent = truncate(thread.anchor.quote, 96);
@@ -399,18 +415,24 @@ function renderThreadGroup(root, title, threads) {
 
     const meta = document.createElement("p");
     meta.className = "thread-meta";
-    meta.textContent = `${thread.comments.length} comment${thread.comments.length === 1 ? "" : "s"}`;
+    const commentCount = `${thread.comments.length} comment${thread.comments.length === 1 ? "" : "s"}`;
+    const latest = thread.comments[thread.comments.length - 1];
+    if (latest) {
+      meta.textContent = `${commentCount} • Updated ${formatDate(latest.createdAt)}`;
+    } else {
+      meta.textContent = commentCount;
+    }
     card.appendChild(meta);
 
     const controls = document.createElement("div");
     controls.className = "thread-controls";
-    controls.appendChild(makeButton("Go", "jump", thread.id));
+    controls.appendChild(makeButton("Open", "jump", thread.id, { variant: "primary" }));
     if (thread.status === "resolved") {
-      controls.appendChild(makeButton("Reopen", "reopen", thread.id));
+      controls.appendChild(makeButton("Reopen", "reopen", thread.id, { variant: "soft" }));
     } else {
-      controls.appendChild(makeButton("Resolve", "resolve", thread.id));
+      controls.appendChild(makeButton("Resolve", "resolve", thread.id, { variant: "soft" }));
     }
-    controls.appendChild(makeButton("Remove", "deleteThread", thread.id));
+    controls.appendChild(makeButton("Remove", "deleteThread", thread.id, { variant: "danger" }));
     card.appendChild(controls);
 
     const comments = document.createElement("ul");
@@ -433,12 +455,12 @@ function renderThreadGroup(root, title, threads) {
       const itemActions = document.createElement("div");
       itemActions.className = "comment-actions";
 
-      const edit = makeButton("Edit", "editComment", thread.id);
+      const edit = makeButton("Edit", "editComment", thread.id, { variant: "ghost", size: "small" });
       edit.dataset.commentId = comment.id;
       edit.dataset.commentBody = comment.body;
       itemActions.appendChild(edit);
 
-      const remove = makeButton("Delete", "deleteComment", thread.id);
+      const remove = makeButton("Delete", "deleteComment", thread.id, { variant: "ghost", size: "small" });
       remove.dataset.commentId = comment.id;
       itemActions.appendChild(remove);
 
@@ -454,11 +476,11 @@ function renderThreadGroup(root, title, threads) {
 
       const replyInput = document.createElement("textarea");
       replyInput.rows = 2;
-      replyInput.placeholder = "Reply";
+      replyInput.placeholder = "Reply with context";
       replyInput.dataset.replyInput = "true";
       replyBox.appendChild(replyInput);
 
-      replyBox.appendChild(makeButton("Reply", "reply", thread.id));
+      replyBox.appendChild(makeButton("Reply", "reply", thread.id, { variant: "primary" }));
       card.appendChild(replyBox);
     }
 
@@ -856,13 +878,29 @@ function positionComposer(rect) {
   composer.style.bottom = "auto";
 }
 
-function makeButton(label, action, threadId) {
+function makeButton(label, action, threadId, options = {}) {
+  const variant = options.variant ?? "soft";
+  const size = options.size ?? "default";
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
   button.dataset.action = action;
   button.dataset.threadId = threadId;
+  button.className = `ui-btn variant-${variant} size-${size}`;
   return button;
+}
+
+function humanizeThreadStatus(status) {
+  if (status === "open") {
+    return "Open";
+  }
+  if (status === "orphaned") {
+    return "Orphaned";
+  }
+  if (status === "resolved") {
+    return "Resolved";
+  }
+  return status;
 }
 
 function wrapFirstTextMatch(root, thread) {
