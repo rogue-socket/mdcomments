@@ -54,6 +54,19 @@ describe("anchorEngine", () => {
     expect(result.end).toBeGreaterThan(result.start);
   });
 
+  it("anchors list selections that include rendered bullet markers", () => {
+    const source = ["- Ship docs", "- Add examples", "- Capture screenshots"].join("\n");
+    const selectedFromPreview = ["\u2022 Ship docs", "\u2022 Add examples"].join("\n");
+
+    const anchor = buildAnchorFromQuote(source, selectedFromPreview);
+    expect(anchor).not.toBeNull();
+
+    const result = resolveAnchor(source, anchor!);
+    expect(result.confidence).not.toBe("orphaned");
+    expect(result.start).toBeGreaterThanOrEqual(0);
+    expect(result.end).toBeGreaterThan(result.start);
+  });
+
   it("marks thread orphaned when quote disappears", () => {
     const source = "Alpha beta gamma delta";
     const thread: ThreadRecord = {

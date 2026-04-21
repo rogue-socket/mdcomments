@@ -36,24 +36,26 @@ export function buildAnchorFromQuote(source: string, quote: string): AnchorData 
     return null;
   }
 
-  const exactIndex = source.indexOf(rawQuote);
-  if (exactIndex >= 0) {
-    return buildAnchorFromMatch(source, rawQuote, exactIndex);
-  }
+  for (const candidate of buildQuoteCandidates(rawQuote)) {
+    const exactIndex = source.indexOf(candidate);
+    if (exactIndex >= 0) {
+      return buildAnchorFromMatch(source, candidate, exactIndex);
+    }
 
-  const collapsedWhitespaceIndex = findByCollapsedWhitespace(source, rawQuote);
-  if (collapsedWhitespaceIndex >= 0) {
-    return buildAnchorFromMatch(source, rawQuote, collapsedWhitespaceIndex);
-  }
+    const collapsedWhitespaceIndex = findByCollapsedWhitespace(source, candidate);
+    if (collapsedWhitespaceIndex >= 0) {
+      return buildAnchorFromMatch(source, candidate, collapsedWhitespaceIndex);
+    }
 
-  const fuzzyIndex = findBestFuzzyMatch(source, rawQuote, Math.floor(source.length / 2));
-  if (fuzzyIndex >= 0) {
-    return buildAnchorFromMatch(source, rawQuote, fuzzyIndex);
-  }
+    const fuzzyIndex = findBestFuzzyMatch(source, candidate, Math.floor(source.length / 2));
+    if (fuzzyIndex >= 0) {
+      return buildAnchorFromMatch(source, candidate, fuzzyIndex);
+    }
 
-  const orderedSpan = findOrderedTermSpan(source, rawQuote);
-  if (orderedSpan) {
-    return buildAnchorFromSpan(source, rawQuote, orderedSpan.start, orderedSpan.end);
+    const orderedSpan = findOrderedTermSpan(source, candidate);
+    if (orderedSpan) {
+      return buildAnchorFromSpan(source, candidate, orderedSpan.start, orderedSpan.end);
+    }
   }
 
   return null;
@@ -97,13 +99,15 @@ export function resolveAnchor(source: string, anchor: AnchorData): ResolvedAncho
     };
   }
 
-  const exactIndex = source.indexOf(quote);
-  if (exactIndex >= 0) {
-    return {
-      start: exactIndex,
-      end: exactIndex + quote.length,
-      confidence: "exact"
-    };
+  for (const candidate of buildQuoteCandidates(quote)) {
+    const exactIndex = source.indexOf(candidate);
+    if (exactIndex >= 0) {
+      return {
+        start: exactIndex,
+        end: exactIndex + candidate.length,
+        confidence: "exact"
+      };
+    }
   }
 
   const byRangeHint = tryRangeHint(source, anchor);
@@ -115,13 +119,15 @@ export function resolveAnchor(source: string, anchor: AnchorData): ResolvedAncho
     };
   }
 
-  const fuzzyIndex = findBestFuzzyMatch(source, quote, anchor.startHint);
-  if (fuzzyIndex >= 0) {
-    return {
-      start: fuzzyIndex,
-      end: Math.min(source.length, fuzzyIndex + quote.length),
-      confidence: "fuzzy"
-    };
+  for (const candidate of buildQuoteCandidates(quote)) {
+    const fuzzyIndex = findBestFuzzyMatch(source, candidate, anchor.startHint);
+    if (fuzzyIndex >= 0) {
+      return {
+        start: fuzzyIndex,
+        end: Math.min(source.length, fuzzyIndex + candidate.length),
+        confidence: "fuzzy"
+      };
+    }
   }
 
   return {
@@ -297,6 +303,31 @@ function normalizeSmartPunctuation(value: string): string {
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, "-")
     .replace(/\u2026/g, "...");
+}
+
+function buildQuoteCandidates(value: string): string[] {
+  const raw = value.trim();
+  if (!raw) {
+    return [];
+  }
+
+  const stripped = stripStructuralMarkers(raw);
+  if (!stripped || stripped === raw) {
+    return [raw];
+  }
+
+  return [raw, stripped];
+}
+
+function stripStructuralMarkers(value: string): string {
+  return value
+    .replace(/(^|\n)\s*#{1,6}\s+/g, "$1")
+    .replace(/(^|\n)\s*>+\s*/g, "$1")
+    .replace(/(^|\n)\s*(?:\d+[.)]|[-*+]|[\u2022\u25e6\u25aa\u2023])\s+/g, "$1")
+    .replace(/(^|\n)\s*\[[ xX]\]\s+/g, "$1")
+    .replace(/(^|\n)\s*`{1,3}\s*/g, "$1")
+    .replace(/\s*`{1,3}(\n|$)/g, "$1")
+    .trim();
 }
 
 function findByCollapsedWhitespace(source: string, quote: string): number {
