@@ -890,6 +890,44 @@ function wrapFirstTextMatch(root, thread) {
   highlightRangeByTextSegments(root, range, thread);
 }
 
+const BLOCK_TAG_NAME_SET = new Set([
+  "ADDRESS",
+  "ARTICLE",
+  "ASIDE",
+  "BLOCKQUOTE",
+  "DD",
+  "DIV",
+  "DL",
+  "DT",
+  "FIELDSET",
+  "FIGCAPTION",
+  "FIGURE",
+  "FOOTER",
+  "FORM",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "HEADER",
+  "HR",
+  "LI",
+  "MAIN",
+  "NAV",
+  "OL",
+  "P",
+  "PRE",
+  "SECTION",
+  "TABLE",
+  "TBODY",
+  "TD",
+  "TH",
+  "THEAD",
+  "TR",
+  "UL"
+]);
+
 function buildHighlightTextIndex(root) {
   const nodes = [];
   const starts = [];
@@ -912,8 +950,8 @@ function buildHighlightTextIndex(root) {
 
   while (walker.nextNode()) {
     const node = walker.currentNode;
-    if (nodes.length > 0) {
-      // Preserve cross-element selection spacing in the search buffer.
+    if (nodes.length > 0 && shouldInsertBoundarySpace(root, nodes[nodes.length - 1], node)) {
+      // Keep block-level boundaries searchable without injecting spaces between inline fragments.
       fullText += " ";
     }
 
@@ -927,6 +965,44 @@ function buildHighlightTextIndex(root) {
     starts,
     fullText
   };
+}
+
+function shouldInsertBoundarySpace(root, previousNode, nextNode) {
+  const previousText = previousNode.nodeValue ?? "";
+  const nextText = nextNode.nodeValue ?? "";
+  if (!previousText || !nextText) {
+    return false;
+  }
+
+  if (/\s$/.test(previousText) || /^\s/.test(nextText)) {
+    return false;
+  }
+
+  const previousParent = previousNode.parentElement;
+  const nextParent = nextNode.parentElement;
+  if (!previousParent || !nextParent) {
+    return false;
+  }
+
+  const previousBlock = findClosestBlockAncestor(previousParent, root);
+  const nextBlock = findClosestBlockAncestor(nextParent, root);
+  if (!previousBlock || !nextBlock) {
+    return false;
+  }
+
+  return previousBlock !== nextBlock;
+}
+
+function findClosestBlockAncestor(node, boundary) {
+  let current = node;
+  while (current && current !== boundary) {
+    if (BLOCK_TAG_NAME_SET.has(current.tagName)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+
+  return boundary instanceof HTMLElement ? boundary : null;
 }
 
 function findBestThreadMatch(textIndex, thread) {
@@ -983,7 +1059,7 @@ function findBestThreadMatch(textIndex, thread) {
 function buildHighlightNeedles(anchor) {
   const candidates = [];
   const quote = String(anchor?.quote ?? "");
-  const strippedQuote = stripListMarkers(quote);
+  const strippedQuote = stripStructuralMarkers(quote);
   const suffixFallback = takeVisibleFallbackText(anchor?.suffix ?? "");
 
   candidates.push(quote);
@@ -1009,14 +1085,19 @@ function buildHighlightNeedles(anchor) {
   return normalizedUnique;
 }
 
-function stripListMarkers(value) {
+function stripStructuralMarkers(value) {
   return String(value)
-    .replace(/(^|\n)\s*(?:\d+[.)]|[-*+])\s+/g, "$1")
+    .replace(/(^|\n)\s*#{1,6}\s+/g, "$1")
+    .replace(/(^|\n)\s*>+\s*/g, "$1")
+    .replace(/(^|\n)\s*(?:\d+[.)]|[-*+]|[\u2022\u25e6\u25aa\u2023])\s+/g, "$1")
+    .replace(/(^|\n)\s*\[[ xX]\]\s+/g, "$1")
+    .replace(/(^|\n)\s*`{1,3}\s*/g, "$1")
+    .replace(/\s*`{1,3}(\n|$)/g, "$1")
     .trim();
 }
 
 function takeVisibleFallbackText(value) {
-  const cleaned = stripListMarkers(String(value)).trim();
+  const cleaned = stripStructuralMarkers(String(value)).trim();
   if (!cleaned) {
     return "";
   }
