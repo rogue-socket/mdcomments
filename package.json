@@ -2,7 +2,7 @@
   "name": "commentonmd",
   "displayName": "MD Comments",
   "description": "Inline comments for rendered Markdown previews in VS Code",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "publisher": "rogue-socket",
   "preview": true,
   "license": "MIT",
@@ -14,6 +14,7 @@
   "bugs": {
     "url": "https://github.com/rogue-socket/mdcomments/issues"
   },
+  "icon": "media/logo.png",
   "engines": {
     "vscode": "^1.95.0"
   },

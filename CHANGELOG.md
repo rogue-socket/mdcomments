@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.8 - 2026-04-17
+
+- Added a marketplace logo for the extension
+
 ## 0.0.7 - 2026-04-16
 
 - Fixed anchoring for non-contiguous table column selections so multi-row selections no longer save as orphaned in common cases
