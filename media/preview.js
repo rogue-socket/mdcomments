@@ -492,8 +492,42 @@ function renderThreadGroup(root, title, threads) {
 
 function applyThreadHighlights() {
   const highlightable = state.threads.filter((thread) => thread.status !== "resolved");
+  if (highlightable.length === 0) {
+    return;
+  }
+
+  // Build the text index ONCE before any DOM mutations.
+  const textIndex = buildHighlightTextIndex(previewContent);
+  if (!textIndex || !textIndex.fullText) {
+    return;
+  }
+
+  // Phase 1: find all matches and create all Ranges while DOM is unmodified.
+  const matched = [];
   for (const thread of highlightable) {
-    wrapFirstTextMatch(previewContent, thread);
+    const quote = thread.anchor?.quote ?? "";
+    if (!quote.trim()) {
+      continue;
+    }
+    const match = findBestThreadMatch(textIndex, thread);
+    if (!match) {
+      continue;
+    }
+    const range = createRangeFromTextSpan(textIndex, match.start, match.end);
+    if (!range || range.collapsed) {
+      continue;
+    }
+    matched.push({ thread, match, range });
+  }
+
+  // Phase 2: sort by match start position descending (reverse document order).
+  matched.sort((a, b) => b.match.start - a.match.start || a.thread.id.localeCompare(b.thread.id));
+
+  // Phase 3: apply wraps in reverse document order.
+  // Each wrap only mutates DOM at or after the current position, so earlier
+  // Ranges (higher in the document) remain valid throughout.
+  for (const { thread, range } of matched) {
+    highlightRangeByTextSegments(previewContent, range, thread);
   }
 }
 
@@ -903,31 +937,6 @@ function humanizeThreadStatus(status) {
   return status;
 }
 
-function wrapFirstTextMatch(root, thread) {
-  const quote = thread.anchor?.quote ?? "";
-  const needle = quote.trim();
-  if (!needle) {
-    return;
-  }
-
-  const textIndex = buildHighlightTextIndex(root);
-  if (!textIndex || !textIndex.fullText) {
-    return;
-  }
-
-  const match = findBestThreadMatch(textIndex, thread);
-  if (!match) {
-    return;
-  }
-
-  const range = createRangeFromTextSpan(textIndex, match.start, match.end);
-  if (!range || range.collapsed) {
-    return;
-  }
-
-  highlightRangeByTextSegments(root, range, thread);
-}
-
 const BLOCK_TAG_NAME_SET = new Set([
   "ADDRESS",
   "ARTICLE",
@@ -978,7 +987,7 @@ function buildHighlightTextIndex(root) {
       }
 
       const parent = node.parentElement;
-      if (!parent || parent.closest(".mdc-anchor")) {
+      if (!parent) {
         return NodeFilter.FILTER_REJECT;
       }
 
@@ -1240,7 +1249,7 @@ function collectTextSegmentsInRange(root, range) {
       }
 
       const parent = node.parentElement;
-      if (!parent || parent.closest(".mdc-anchor")) {
+      if (!parent) {
         return NodeFilter.FILTER_REJECT;
       }
 

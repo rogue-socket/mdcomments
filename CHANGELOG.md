@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.9 - 2026-04-26
+
+- Fixed highlights not rendering when multiple comment threads exist on nearby or overlapping text
+- Refactored highlight application to a single-pass batch approach for correctness and reliability
+
 ## 0.0.8 - 2026-04-17
 
 - Added a marketplace logo for the extension

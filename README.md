@@ -29,7 +29,7 @@ MD Comments is built for documentation review workflows where feedback needs to 
 
 ## Core capabilities
 
-- Custom markdown preview webview with inline anchor highlights
+- Custom markdown preview webview with inline anchor highlights, including overlapping threads
 - Selection overlay that surfaces existing threads for selected text
 - Hover overlay that previews nearby thread context
 - Activity bar thread explorer (`mdcomments` -> `Threads`)

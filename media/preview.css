@@ -582,6 +582,10 @@ textarea:focus-visible {
   background: var(--warning-soft);
 }
 
+.mdc-anchor > .mdc-anchor:not(.mdc-hover):not(.pulse) {
+  background: transparent;
+}
+
 .mdc-anchor.mdc-hover {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent 58%);
   background: color-mix(in srgb, var(--accent) 28%, transparent 72%);
